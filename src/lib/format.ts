@@ -43,23 +43,60 @@ function parseIso(iso: string | Date): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** `1 নভেম্বর 2026` / `1 November 2026`. Latin digits, Bangla month names. */
+/**
+ * Chanasta is a Bangladesh product, so dates are shown in Dhaka time (UTC+6, no
+ * DST) regardless of where the viewer or the build machine is. That keeps claim
+ * timestamps stable across devices and CI.
+ */
+const DISPLAY_TIME_ZONE = "Asia/Dhaka";
+
+interface DhakaParts {
+  year: number;
+  month: number; // 1-12
+  day: number;
+  hours: number;
+  minutes: number;
+}
+
+function dhakaParts(date: Date): DhakaParts {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: DISPLAY_TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const read = (type: Intl.DateTimeFormatPartTypes): number => {
+    const part = parts.find((candidate) => candidate.type === type);
+    return part ? Number(part.value) : 0;
+  };
+  return {
+    year: read("year"),
+    month: read("month"),
+    day: read("day"),
+    hours: read("hour"),
+    minutes: read("minute"),
+  };
+}
+
+/** `1 নভেম্বর 2026` / `1 November 2026`. Latin digits, Bangla month names, Dhaka time. */
 export function formatDate(lang: Lang, iso: string | Date): string {
   const date = parseIso(iso);
   if (!date) return "";
-  const day = date.getDate();
-  const month = date.getMonth();
-  const year = date.getFullYear();
+  const { day, month, year } = dhakaParts(date);
+  const monthIndex = Math.min(11, Math.max(0, month - 1));
   return lang === "bn"
-    ? `${day} ${BN_MONTHS[month]} ${year}`
-    : `${day} ${EN_MONTHS[month]} ${year}`;
+    ? `${day} ${BN_MONTHS[monthIndex]} ${year}`
+    : `${day} ${EN_MONTHS[monthIndex]} ${year}`;
 }
 
 export function formatDateTime(lang: Lang, iso: string | Date): string {
   const date = parseIso(iso);
   if (!date) return "";
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const { hours, minutes: minuteValue } = dhakaParts(date);
+  const minutes = String(minuteValue).padStart(2, "0");
   const suffix = lang === "bn" ? (hours < 12 ? "পূর্বাহ্ণ" : "অপরাহ্ণ") : hours < 12 ? "am" : "pm";
   const hour12 = hours % 12 === 0 ? 12 : hours % 12;
   return `${formatDate(lang, date)}, ${hour12}:${minutes} ${suffix}`;
