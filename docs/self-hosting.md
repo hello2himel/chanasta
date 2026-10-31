@@ -242,3 +242,44 @@ editing limits on the fly; raise the limits only with a reason and re-run the ha
       polling, no bank statement import) — this is permanent for MVP.
 - [ ] Dependency/secret hygiene: no `.env` in git, no service-role key in CI logs, rotate keys if
       exposed; keep the vendored deshiQR code in sync with `pnpm sync:deshiqr`.
+
+## Local Supabase (no cloud account needed)
+
+You can run the whole backend on your machine with Docker and the Supabase CLI — no Supabase
+account, no keys from anyone:
+
+```sh
+# once per machine: Docker must be running
+npx supabase start          # boots Postgres + Auth + REST + Mailpit locally
+pnpm supabase:reset         # applies supabase/migrations/* and supabase/seed.sql
+npx supabase status -o env  # prints API_URL, ANON_KEY, SERVICE_ROLE_KEY
+```
+
+Then point the app at it (create `.env.local`, git-ignored):
+
+```sh
+VITE_SUPABASE_URL=http://127.0.0.1:54321
+VITE_SUPABASE_ANON_KEY=<ANON_KEY from `supabase status -o env`>
+```
+
+`pnpm dev` now runs in Supabase mode: magic links appear in Mailpit at <http://127.0.0.1:54324>,
+real Auth users are created, and the Postgres RLS/RPC model is exercised exactly as in production.
+`pnpm supabase:stop` shuts everything down; `pnpm supabase:reset` wipes and re-seeds.
+
+Reproduce that verification any time with:
+
+```sh
+npx supabase start
+eval "$(npx supabase status -o env | sed 's/^/export /')"
+node scripts/check-supabase-live.mjs
+```
+
+This repo was verified end-to-end against the local stack: **25/25 live assertions** covering Auth
+sign-in, owner inserts, publish-requires-a-method, anon reads through the public views (no `user_id`),
+anon denial on base tables (401), claim RPC validation + the 5/hour rate limit, txid staying private,
+owner-only claims, claim confirm → public badge, cross-user RLS isolation, foreign-claim rejection,
+reserved/invalid slug rejection, and slug-addressable public pages.
+
+Canonical schema: `supabase/schema.sql` is the file to paste into a cloud SQL editor;
+`supabase/migrations/20261101000000_chanasta_init.sql` is the same SQL for the CLI. Keep them in
+sync with `pnpm supabase:sync-schema` after editing the canonical file.

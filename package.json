@@ -15,7 +15,12 @@
     "preview": "vite preview",
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "sync:deshiqr": "node scripts/sync-deshiqr.mjs"
+    "sync:deshiqr": "node scripts/sync-deshiqr.mjs",
+    "supabase:start": "npx supabase start",
+    "supabase:stop": "npx supabase stop",
+    "supabase:status": "npx supabase status -o env",
+    "supabase:reset": "npx supabase db reset",
+    "supabase:sync-schema": "cp supabase/schema.sql supabase/migrations/20261101000000_chanasta_init.sql"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
