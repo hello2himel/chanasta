@@ -1,56 +1,84 @@
 /**
- * `/@:slug` — the product. Identity, amount ladder, the creator's own payment
- * methods, the self-reported claim form and the public claim list.
+ * `/@:slug` — the supporter page.
  *
- * The amount chips re-render the QR with `withAmount(base, amount)` (architecture
- * §5, Lead-approved); ইচ্ছেমতো keeps the static payload. No account is ever
- * substituted, and the decode badge + honesty strip are always visible.
+ * Identity → amount ladder → the chai receipt (creator's own QR, derived for the
+ * chosen amount with `renderAmountQr`) → other methods with decode badges →
+ * the self-reported claim form → the public claims ledger.
+ *
+ * Every state the old page supported is kept: published, draft preview,
+ * suspended/not-found (rendered through the 404 page), no payment methods, no
+ * claims, rate-limit/validation errors (the shared claim form owns those),
+ * language re-render, amount persistence, and the share/poster actions. The
+ * report link and engine credit are part of the shared chrome footer.
  */
-import { h, announce, focusElement, scrollToElement } from "../lib/dom.ts";
-import { formatDate, formatTaka } from "../lib/format.ts";
-import { parseTaka } from "../lib/validate.ts";
+import { h, copyText, downloadSvg, toast } from "../lib/dom.ts";
+import { formatDate } from "../lib/format.ts";
 import { getSelectedAmount, setSelectedAmount } from "../lib/prefs.ts";
+import { buildShareKit } from "../lib/share.ts";
 import type { AppContext } from "../lib/app.ts";
 import type { Creator, PaymentMethod } from "../lib/types.ts";
 import { icon } from "../components/icons.ts";
-import {
-  amountChips,
-  avatar,
-  badge,
-  button,
-  emptyState,
-  linkButton,
-  sectionHeading,
-} from "../components/ui.ts";
-import { renderPaymentMethods } from "../components/method-card.ts";
-import { renderClaimCard, renderClaimForm } from "../components/claim.ts";
+import { pubAvatar, pubButton, pubLink, pubStamp, pubSlug } from "../components/public/primitives.ts";
+import { renderAmountLadder } from "../components/public/amount-ladder.ts";
+import { lastUpdatedIso, renderReceipt } from "../components/public/receipt.ts";
+import { renderMethodPicker } from "../components/public/methods.ts";
+import { renderClaimsLedger } from "../components/public/ledger.ts";
+import { renderClaimForm } from "../components/claim.ts";
 import { renderNotFound } from "./not-found.ts";
+import { COPY, pick, receiptCopyFor } from "./copy.public.ts";
 
-const CLAIM_PAGE_SIZE = 12;
+const SOCIAL_LABELS: Record<string, string> = {
+  youtube: "YouTube",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  x: "X",
+  threads: "Threads",
+  telegram: "Telegram",
+  linkedin: "LinkedIn",
+  website: "Website",
+};
 
-function lastUpdated(creator: Creator, methods: PaymentMethod[]): string {
-  const dates = [creator.updated_at, ...methods.map((method) => method.updated_at)].filter(Boolean) as string[];
-  const newest = dates
-    .map((value) => ({ value, time: Date.parse(value) }))
-    .filter((entry) => Number.isFinite(entry.time))
-    .sort((a, b) => b.time - a.time)[0];
-  return newest?.value ?? creator.updated_at;
+function socialRow(creator: Creator): HTMLElement | null {
+  const entries = Object.entries(creator.socials ?? {}).filter(([, url]) => typeof url === "string" && url.length > 0);
+  if (entries.length === 0) return null;
+  return h(
+    "ul",
+    { class: "pub-supporter__socials", attrs: { "aria-label": "Links" } },
+    ...entries.slice(0, 4).map(([key, url]) =>
+      h(
+        "li",
+        {},
+        h(
+          "a",
+          {
+            class: "pub-supporter__social",
+            attrs: { href: url, target: "_blank", rel: "noopener noreferrer" },
+          },
+          h("span", { text: SOCIAL_LABELS[key] ?? key }),
+          h("span", { class: "pub-supporter__social-icon", html: icon("external", 12), attrs: { "aria-hidden": "true" } }),
+        ),
+      ),
+    ),
+  );
 }
 
 export async function renderCreator(ctx: AppContext): Promise<HTMLElement> {
-  if (ctx.route.name !== "creator" && ctx.route.name !== "thanks") {
-    return renderNotFound(ctx);
-  }
-  const slug = ctx.route.name === "thanks" ? ctx.route.slug : ctx.route.slug;
+  if (ctx.route.name !== "creator") return renderNotFound(ctx);
+  const slug = ctx.route.slug;
   const creator = await ctx.data.getCreator(slug).catch(() => null);
   if (!creator) {
     ctx.setMeta(ctx.t("meta.title.notFound"), { noindex: true });
     return renderNotFound(ctx);
   }
+  if (creator.status === "suspended") {
+    ctx.setMeta(ctx.t("meta.title.notFound"), { noindex: true });
+    return renderNotFound(ctx, { suspended: true });
+  }
 
   const methods = await ctx.data.listPaymentMethods(slug).catch(() => [] as PaymentMethod[]);
-  const isDraft = creator.status === "draft";
   const published = creator.status === "published";
+  const isDraft = creator.status === "draft";
   const claims = published ? await ctx.data.listPublicClaims(slug).catch(() => []) : [];
 
   ctx.setMeta(ctx.t("meta.title.creator", { name: creator.display_name }), {
@@ -59,251 +87,240 @@ export async function renderCreator(ctx: AppContext): Promise<HTMLElement> {
   });
   ctx.setFooterCreator(creator);
 
+  const copy = COPY.supporter;
+  const t = pick(ctx.lang);
   const demo = creator.is_demo === true;
+  const updatedIso = lastUpdatedIso(creator, methods);
+
   let selectedAmount: number | null = getSelectedAmount() ?? 20;
   if (selectedAmount > 100_000) selectedAmount = 100_000;
+  let selectedMethod: PaymentMethod | null = methods[0] ?? null;
 
-  // ---- identity ----------------------------------------------------------
+  // ---- identity ---------------------------------------------------------
   const identity = h(
-    "section",
-    { class: "creator-identity", attrs: { "aria-labelledby": "creator-name" } },
+    "header",
+    { class: "pub-supporter__identity", attrs: { "aria-labelledby": "creator-name" } },
     h(
       "div",
-      { class: "creator-identity__row" },
-      avatar(creator.avatar_emoji, "lg", undefined),
+      { class: "pub-supporter__identity-row" },
+      pubAvatar(creator.avatar_emoji, "lg"),
       h(
         "div",
-        { class: "creator-identity__names" },
+        { class: "pub-supporter__names" },
         h(
           "div",
-          { class: "creator-identity__title-row" },
-          h("h1", { class: "creator-identity__name", id: "creator-name", text: creator.display_name }),
-          demo ? badge({ label: ctx.t("demo.badge"), variant: "demo" }) : null,
+          { class: "pub-supporter__title-row" },
+          h("h1", { class: "pub-supporter__name", id: "creator-name", text: creator.display_name }),
+          demo ? pubStamp(ctx.t("demo.badge"), "demo", "store") : null,
         ),
-        creator.tagline ? h("p", { class: "creator-identity__tagline", text: creator.tagline }) : null,
+        creator.tagline ? h("p", { class: "pub-supporter__tagline", text: creator.tagline }) : null,
+        h("p", { class: "pub-supporter__slug-row" }, pubSlug(creator.slug)),
       ),
     ),
-    h("p", { class: "creator-identity__subline", text: ctx.t("creator.subline", { name: creator.display_name }) }),
-    h("p", { class: "creator-identity__updated" },
-      `${
-        ctx.lang === "bn" ? "সর্বশেষ হালনাগাদ" : "Last updated"
-      }: `,
-      h("time", { attrs: { datetime: lastUpdated(creator, methods) }, text: formatDate(ctx.lang, lastUpdated(creator, methods)) }),
+    h("p", { class: "pub-supporter__subline", text: ctx.t("creator.subline", { name: creator.display_name }) }),
+    creator.bio ? h("p", { class: "pub-supporter__bio", text: creator.bio }) : null,
+    socialRow(creator),
+    h(
+      "p",
+      { class: "pub-supporter__updated" },
+      `${t(copy.lastUpdated)}: `,
+      h("time", { attrs: { datetime: updatedIso }, text: formatDate(ctx.lang, updatedIso) }),
     ),
     isDraft
       ? h(
           "div",
-          { class: "draft-banner draft-banner--page", attrs: { role: "note" } },
-          h("span", { class: "draft-banner__icon", html: icon("info", 16) }),
-          h("span", { class: "draft-banner__text", text: ctx.t("creator.draftBanner") }),
-          h(
-            "a",
-            { class: "link", attrs: { href: ctx.href("/dashboard/profile"), "data-link": true }, text: ctx.t("creator.draftPublish") },
-          ),
+          { class: "pub-note pub-note--warn", attrs: { role: "note" } },
+          h("span", { class: "pub-note__icon", html: icon("info", 16), attrs: { "aria-hidden": "true" } }),
+          h("span", { text: t(copy.draftBanner) }),
+          h("a", { class: "pub-note__link", attrs: { href: ctx.href("/dashboard/profile"), "data-link": true }, text: ctx.t("creator.draftPublish") }),
         )
       : null,
   );
 
-  // ---- payment methods + claim form -------------------------------------
-  const methodsHandle = published || isDraft
-    ? renderPaymentMethods(ctx, {
-        methods,
-        creatorName: creator.display_name,
+  // ---- receipt (re-rendered on amount / method change) -------------------
+  const receiptMount = h("div", { class: "pub-supporter__receipt" });
+  const refreshReceipt = () => {
+    receiptMount.replaceChildren(
+      renderReceipt({
+        ctx,
+        creator,
+        method: selectedMethod,
         amount: selectedAmount,
-        creatorSlug: creator.slug,
+        copy: receiptCopyFor(ctx.lang),
+        demo,
+        updatedIso,
+      }),
+    );
+  };
+  refreshReceipt();
+
+  const claimFormSection = published && methods.length > 0 ? renderClaimForm(ctx, {
+    creatorSlug: creator.slug,
+    creatorName: creator.display_name,
+    methods,
+    selectedAmount,
+    onSubmitted: () => ctx.navigate(`/@${creator.slug}/thanks`),
+  }) : null;
+  claimFormSection?.classList.add("pub-claim-form");
+  const claimAmountInput = claimFormSection?.querySelector<HTMLInputElement>("#claim-amount") ?? null;
+
+  const syncClaimAmount = () => {
+    if (claimAmountInput && !claimAmountInput.dataset.dirty) {
+      claimAmountInput.value = selectedAmount === null ? "" : String(selectedAmount);
+    }
+  };
+
+  // ---- amount ladder ----------------------------------------------------
+  const ladder = renderAmountLadder({
+    ctx,
+    selected: selectedAmount,
+    anyLabel: t(copy.anyAmount),
+    anySublabel: t(copy.anyAmountSub),
+    customLabel: t(copy.customLabel),
+    customPlaceholder: t(copy.customPlaceholder),
+    customError: t(copy.customError),
+    onSelect: (amount) => {
+      selectedAmount = amount;
+      setSelectedAmount(amount);
+      ladder.setSelected(amount);
+      refreshReceipt();
+      syncClaimAmount();
+    },
+  });
+  const amountSection = h(
+    "section",
+    { class: "pub-supporter__amount", attrs: { "aria-labelledby": "pub-amount-title" } },
+    h(
+      "header",
+      { class: "pub-supporter__amount-head" },
+      h("h2", { class: "pub-supporter__amount-title", id: "pub-amount-title", text: t(copy.amountTitle) }),
+      h("p", { class: "pub-supporter__amount-help", text: t(copy.amountHelper) }),
+    ),
+    ladder.element,
+  );
+
+  // ---- other methods ----------------------------------------------------
+  const methodPicker = methods.length > 0
+    ? renderMethodPicker({
+        ctx,
+        methods,
+        selectedId: selectedMethod?.id ?? null,
+        title: t(copy.methodTitle),
+        help: t(copy.methodHelp),
+        selectedLabel: t(copy.selectedMethod),
+        onSelect: (method) => {
+          selectedMethod = method;
+          refreshReceipt();
+        },
       })
     : null;
 
-  // Amount ladder (rendered before the methods in the DOM order; CSS moves it on desktop).
-  const customWrap = h("div", { class: "amount-custom", attrs: { hidden: true } });
-  const customInput = h("input", {
-    class: "field__control amount-input__control",
-    id: "creator-custom-amount",
-    attrs: {
-      type: "text",
-      inputmode: "numeric",
-      autocomplete: "off",
-      placeholder: ctx.t("claim.form.amountPlaceholder"),
-      "aria-label": ctx.t("creator.amount.customLabel"),
-    },
-  });
-  const customError = h("p", { class: "field__error", attrs: { hidden: true, role: "alert" } });
-  customWrap.append(
-    h("label", { class: "field__label", attrs: { for: "creator-custom-amount" }, text: ctx.t("creator.amount.customLabel") }),
-    h("div", { class: "amount-input" }, h("span", { class: "amount-input__prefix", text: "৳", attrs: { "aria-hidden": "true" } }), customInput),
-    h("p", { class: "field__helper", text: ctx.t("creator.amount.customHelper") }),
-    customError,
-  );
-
-  const applyAmount = (amount: number | null, options: { announceChange?: boolean } = {}) => {
-    selectedAmount = amount;
-    setSelectedAmount(amount);
-    methodsHandle?.update(amount);
-    const claimAmountInput = claimSection.querySelector<HTMLInputElement>("#claim-amount");
-    if (claimAmountInput && !claimAmountInput.dataset.dirty) {
-      claimAmountInput.value = amount === null ? "" : String(amount);
-    }
-    if (amount !== null && options.announceChange) {
-      announce(ctx.t("creator.qr.amountAnnounce", { amount: formatTaka(amount, { symbol: false }) }));
-    }
-  };
-
+  // ---- claim form states ------------------------------------------------
   let claimSection: HTMLElement;
-
-  const chips = amountChips(ctx, {
-    selected: selectedAmount,
-    onSelect: (amount) => {
-      customWrap.hidden = amount !== null;
-      if (amount === null) {
-        customInput.focus();
-        customError.hidden = true;
-      }
-      applyAmount(amount, { announceChange: amount !== null });
-    },
-  });
-
-  customInput.addEventListener("change", () => {
-    const parsed = parseTaka(customInput.value);
-    if (parsed === null || parsed < 1 || parsed > 100_000) {
-      customError.textContent = ctx.t("creator.amount.error");
-      customError.hidden = false;
-      customInput.setAttribute("aria-invalid", "true");
-      return;
-    }
-    customError.hidden = true;
-    customInput.removeAttribute("aria-invalid");
-    applyAmount(Math.round(parsed), { announceChange: true });
-  });
-  customInput.addEventListener("keydown", (event) => {
-    if ((event as KeyboardEvent).key === "Enter") {
-      event.preventDefault();
-      customInput.dispatchEvent(new Event("change"));
-    }
-  });
-
-  const amountSection = h(
-    "section",
-    { class: "creator-amount", attrs: { "aria-labelledby": "amount-title" } },
-    h("h2", { class: "creator-amount__title", id: "amount-title", text: ctx.t("creator.amount.title") }),
-    h("p", { class: "creator-amount__helper", text: ctx.t("creator.amount.helper") }),
-    chips.element,
-    customWrap,
-    published && methods.length > 0
-      ? button({
-          label: ctx.t("creator.cta"),
-          variant: "primary",
-          block: true,
-          iconTrailing: "arrowDown",
-          onClick: () => {
-            const heading = document.getElementById("how-to-send");
-            scrollToElement(heading, 72);
-            focusElement(heading as HTMLElement | null);
-          },
-        })
-      : null,
-  );
-
-  // ---- claims ------------------------------------------------------------
-  const claimsSection = h("section", { class: "creator-claims", attrs: { "aria-labelledby": "claims-title" } });
-  const claimsHeader = h(
-    "div",
-    { class: "creator-claims__header" },
-    sectionHeading(ctx.t("creator.claims.title"), "h2", "claims-title"),
-    h("p", { class: "creator-claims__note", text: ctx.t("honesty.claimsNote") }),
-  );
-  claimsSection.append(claimsHeader);
-
-  let shown = 0;
-  const claimsList = h("ul", { class: "claim-list", attrs: { "aria-labelledby": "claims-title" } });
-  const moreButton = button({
-    label: ctx.t("creator.claims.more"),
-    variant: "secondary",
-    size: "sm",
-    onClick: () => {
-      const next = claims.slice(shown, shown + CLAIM_PAGE_SIZE);
-      shown += next.length;
-      appendClaims(next);
-      moreButton.hidden = shown >= claims.length;
-      announce(ctx.t("creator.claims.more"));
-    },
-  });
-  const appendClaims = (batch: typeof claims) => {
-    for (const claim of batch) {
-      claimsList.append(h("li", { class: "claim-list__item" }, renderClaimCard(ctx, claim)));
-    }
-  };
-  if (claims.length > 0) {
-    const first = claims.slice(0, CLAIM_PAGE_SIZE);
-    shown = first.length;
-    appendClaims(first);
-    claimsSection.append(claimsList);
-    moreButton.hidden = shown >= claims.length;
-    if (claims.length > CLAIM_PAGE_SIZE) claimsSection.append(h("div", { class: "claims__more" }, moreButton));
-  } else {
-    claimsSection.append(
-      emptyState({
-        title: ctx.t("creator.claims.empty"),
-        action: published && methods.length > 0
-          ? button({
-              label: ctx.t("claim.cta"),
-              variant: "secondary",
-              size: "sm",
-              onClick: () => {
-                scrollToElement(claimSection, 72);
-                const heading = claimSection.querySelector<HTMLElement>("#claim-form-title");
-                focusElement(heading);
-              },
-            })
-          : undefined,
-      }),
-    );
-  }
-
-  // ---- claim form --------------------------------------------------------
-  if (published && methods.length > 0) {
-    claimSection = renderClaimForm(ctx, {
-      creatorSlug: creator.slug,
-      creatorName: creator.display_name,
-      methods,
-      selectedAmount,
-      onSubmitted: () => {
-        ctx.navigate(`/@${creator.slug}/thanks`);
-      },
-    });
+  if (claimFormSection) {
+    claimSection = claimFormSection;
   } else if (isDraft && methods.length > 0) {
     claimSection = h(
       "section",
-      { class: "claim-form-section claim-form-section--preview" },
-      h("h2", { class: "section-heading", text: ctx.t("claim.form.title") }),
-      h("p", { class: "claim-form__privacy", text: ctx.t("creator.previewOnly") }),
+      { class: "pub-claim-form pub-claim-form--note" },
+      h("h2", { class: "pub-section-head__title", text: ctx.t("claim.form.title") }),
+      h("p", { class: "pub-note", text: t(copy.previewOnly) }),
     );
   } else {
     claimSection = h(
       "section",
-      { class: "claim-form-section" },
-      h("h2", { class: "section-heading", text: ctx.t("claim.form.title") }),
-      h("p", { class: "claim-form__privacy", text: ctx.t("creator.noMethods") }),
+      { class: "pub-claim-form pub-claim-form--note" },
+      h("h2", { class: "pub-section-head__title", text: ctx.t("claim.form.title") }),
+      h("p", { class: "pub-note", text: t(copy.noMethods) }),
     );
   }
 
-  return h(
-    "div",
-    { class: "creator-page" },
-    h("div", { class: "creator-grid" },
-      h("div", { class: "creator-grid__identity" }, identity),
-      h(
-        "div",
-        { class: "creator-grid__side" },
-        amountSection,
-        methodsHandle?.element ?? h("div"),
-        claimSection,
-      ),
-      h("div", { class: "creator-grid__claims" }, claimsSection),
-    ),
+  // ---- claims ledger ----------------------------------------------------
+  const claimsSection = published
+    ? renderClaimsLedger(ctx, claims, {
+        title: t(copy.claimsTitle),
+        note: t(copy.claimsNote),
+        empty: t(copy.claimsEmpty),
+        moreLabel: ctx.t("creator.claims.more"),
+      })
+    : null;
+
+  // ---- share kit (link, WhatsApp/Facebook, A4 poster) -------------------
+  const shareKit = buildShareKit({
+    slug: creator.slug,
+    creatorName: creator.display_name,
+    origin: ctx.origin,
+    base: ctx.base,
+    lang: ctx.lang,
+  });
+  const copyPageLink = () => {
+    void copyText(shareKit.pageUrl).then((ok) => toast(ok ? ctx.t("common.linkCopied") : ctx.t("common.selectToCopy")));
+  };
+  const downloadPoster = () => {
+    // Loaded on demand so the supporter cold load stays lean.
+    void import("../lib/poster.ts")
+      .then(({ generatePosterSvg }) => {
+        const poster = generatePosterSvg({
+          creator,
+          method: selectedMethod,
+          url: shareKit.pageUrl,
+          lang: ctx.lang,
+          demo,
+          amount: selectedAmount,
+        });
+        if (!poster.ok || !poster.svg) {
+          toast(ctx.t("poster.error"));
+          return;
+        }
+        downloadSvg(poster.fileName, poster.svg);
+        toast(ctx.t("poster.downloaded"));
+      })
+      .catch(() => toast(ctx.t("poster.error")));
+  };
+  const shareSection = h(
+    "section",
+    { class: "pub-supporter__share", attrs: { "aria-labelledby": "pub-share-title" } },
+    h("h2", { class: "pub-supporter__share-title", id: "pub-share-title", text: ctx.t("creator.share") }),
     h(
       "div",
-      { class: "creator-page__report" },
-      h("p", { class: "creator-page__report-text", text: ctx.t("report.helper") }),
+      { class: "pub-supporter__share-actions" },
+      pubButton({ label: ctx.t("share.copyLink"), variant: "secondary", size: "sm", icon: "link", onClick: copyPageLink }),
+      pubLink({
+        href: shareKit.whatsappUrl,
+        label: ctx.t("share.whatsapp"),
+        variant: "secondary",
+        size: "sm",
+        icon: "whatsapp",
+        external: true,
+      }),
+      pubLink({
+        href: shareKit.facebookUrl,
+        label: ctx.t("share.facebook"),
+        variant: "secondary",
+        size: "sm",
+        icon: "facebook",
+        external: true,
+      }),
+      pubButton({ label: ctx.t("share.poster"), variant: "secondary", size: "sm", icon: "download", onClick: downloadPoster }),
     ),
+  );
+
+  return h(
+    "div",
+    { class: "pub-page pub-supporter" },
+    h(
+      "div",
+      { class: "pub-supporter__grid" },
+      h("div", { class: "pub-supporter__col pub-supporter__col--side" }, identity, amountSection),
+      h(
+        "div",
+        { class: "pub-supporter__col pub-supporter__col--flow" },
+        receiptMount,
+        methodPicker,
+        claimSection,
+      ),
+    ),
+    claimsSection,
+    shareSection,
   );
 }

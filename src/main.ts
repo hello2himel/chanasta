@@ -6,6 +6,7 @@
  * dynamically imported so the public routes stay inside their JS budget. The
  * Supabase client and jsqr are only ever loaded lazily, in their own chunks.
  */
+import "remixicon/fonts/remixicon.css";
 import "./styles.css";
 import { h, clear, focusElement, setCanonical, setDocumentTitle, setMetaDescription, setNoIndex } from "./lib/dom.ts";
 import { normalizeBaseUrl, readConfig } from "./lib/config.ts";

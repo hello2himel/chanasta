@@ -3,6 +3,10 @@
    verbatim); no raw hex or magic pixels outside the token layer.
    ========================================================================== */
 @import "../design/tokens.css";
+@import "../design/coffee.css";
+@import "./styles/chrome.css";
+@import "./styles/public.css";
+@import "./styles/app.css";
 
 /* --- reset / global ------------------------------------------------------ */
 *,
@@ -3750,3 +3754,29 @@ body.is-embed .main--embed {
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums lining-nums;
 }
+
+/* --------------------------------------------------------------------------
+   Icon system: RemixIcon (https://remixicon.com), one outlined family only.
+   Icons are decorative by default; anything meaningful gets a text label.
+   -------------------------------------------------------------------------- */
+.ri {
+  display: inline-block;
+  line-height: 1;
+  vertical-align: -0.125em;
+  flex: none;
+  speak: never;
+}
+.ri-spin {
+  animation: ri-spin 900ms linear infinite;
+}
+@keyframes ri-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ri-spin {
+    animation: none;
+  }
+}
+

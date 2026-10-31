@@ -38,7 +38,8 @@ test("A4 poster SVG is well-formed, black on white and carries the honest lines"
   assert.match(svg, /width="210mm"/);
   assert.match(svg, /height="297mm"/);
   assert.match(svg, /fill="#ffffff"/);
-  assert.match(svg, /fill="#0a0a0a"/);
+  assert.match(svg, /fill="#241811"/);
+  assert.match(svg, /fill="#9b5521"/);
   // The creator's own QR modules are drawn as a path and scaled to 62mm.
   assert.match(svg, /<path d="M/);
   assert.match(svg, /transform="scale\(/);

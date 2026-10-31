@@ -1,18 +1,19 @@
 /**
- * `/@:slug/thanks` — the claim confirmation.
+ * `/@:slug/thanks` — the claim confirmation, as a thank-you slip.
  *
- * Thanks the supporter for the *message*, shows the claim exactly as submitted
- * with the self-reported badge, and says plainly that Chanasta does not verify
- * the money. No confetti, no "payment successful", no receipt.
+ * It shows the claim exactly as submitted, stamped self-reported, and says
+ * plainly that Chanasta cannot verify the money. No confetti, no "payment
+ * successful", no receipt claim.
  */
 import { h, copyText, toast } from "../lib/dom.ts";
-import { formatTaka, relativeDate } from "../lib/format.ts";
+import { formatTaka, relativeDate, relativeTimeTag } from "../lib/format.ts";
 import { readClaimContext } from "../lib/prefs.ts";
 import { creatorPageUrl } from "../lib/share.ts";
 import type { AppContext } from "../lib/app.ts";
-import { claimStatusBadge, linkButton } from "../components/ui.ts";
 import { icon } from "../components/icons.ts";
+import { pubButton, pubLink, pubStamp } from "../components/public/primitives.ts";
 import { renderNotFound } from "./not-found.ts";
+import { COPY, pick } from "./copy.public.ts";
 
 export async function renderThanks(ctx: AppContext): Promise<HTMLElement> {
   if (ctx.route.name !== "thanks") return renderNotFound(ctx);
@@ -24,71 +25,100 @@ export async function renderThanks(ctx: AppContext): Promise<HTMLElement> {
   }
 
   ctx.setFooterCreator(creator);
-  const context = readClaimContext(slug);
-  const pageUrl = creatorPageUrl(slug, ctx.origin, ctx.base);
   ctx.setMeta(ctx.t("meta.title.thanks"), { noindex: true });
 
-  const share = async () => {
-    const ok = await copyText(pageUrl);
-    toast(ok ? ctx.t("common.linkCopied") : ctx.t("common.selectToCopy"));
+  const copy = COPY.thanks;
+  const t = pick(ctx.lang);
+  const context = readClaimContext(slug);
+  const pageUrl = creatorPageUrl(slug, ctx.origin, ctx.base);
+
+  const share = () => {
+    void copyText(pageUrl).then((ok) => toast(ok ? ctx.t("common.linkCopied") : ctx.t("common.selectToCopy")));
   };
 
   const summary = context
     ? h(
-        "section",
-        { class: "thanks-card", attrs: { "aria-labelledby": "thanks-claim-title" } },
+        "div",
+        { class: "pub-slip__body" },
         h(
-          "header",
-          { class: "thanks-card__head" },
-          h("p", { class: "thanks-card__amount", attrs: { dir: "ltr" } }, formatTaka(context.amount)),
-          claimStatusBadge(ctx, "unverified"),
-          h("h2", { class: "thanks-card__title", id: "thanks-claim-title", text: ctx.t("claim.thanks.yourMessage") }),
+          "div",
+          { class: "pub-thanks__amount-row" },
+          h("span", { class: "pub-thanks__amount", text: formatTaka(context.amount), attrs: { dir: "ltr" } }),
+          pubStamp(ctx.t("claim.badge.selfReported"), "self", "info"),
         ),
+        h("h2", { class: "pub-thanks__your-message", text: t(copy.yourMessage) }),
+        context.message
+          ? h("blockquote", { class: "pub-thanks__message" }, h("p", { text: context.message }))
+          : h("p", { class: "pub-thanks__no-message", text: ctx.t("claim.anonymous") }),
+        context.supporterName ? h("p", { class: "pub-thanks__name", text: context.supporterName }) : null,
         h(
-          "p",
-          { class: "thanks-card__to", text: `${creator.display_name}${ctx.lang === "bn" ? "কে" : ""}` },
-        ),
-        context.supporterName ? h("p", { class: "thanks-card__name", text: context.supporterName }) : null,
-        context.message ? h("blockquote", { class: "thanks-card__message" }, h("p", { text: context.message })) : null,
-        h(
-          "p",
-          { class: "thanks-card__meta" },
-          context.methodKind ? ctx.t(`claim.method.${context.methodKind}`) : null,
-          context.methodKind ? " · " : null,
-          h("time", { attrs: { datetime: context.createdAt }, text: relativeDate(ctx.lang, context.createdAt) }),
+          "dl",
+          { class: "pub-thanks__meta" },
+          h("dt", { text: t(copy.creatorLabel) }),
+          h("dd", { text: creator.display_name }),
+          context.methodKind
+            ? h("dt", { text: t(copy.methodLabel) })
+            : null,
+          context.methodKind ? h("dd", { text: ctx.t(`claim.method.${context.methodKind}`) }) : null,
+          h("dt", { text: t(copy.timeLabel) }),
+          h(
+            "dd",
+            {},
+            h("time", {
+              attrs: { datetime: relativeTimeTag(context.createdAt) },
+              text: relativeDate(ctx.lang, context.createdAt),
+            }),
+          ),
         ),
       )
     : h(
-        "section",
-        { class: "thanks-card thanks-card--neutral", attrs: { role: "status" } },
-        h("h2", { class: "thanks-card__title", text: ctx.t("claim.success.missing") }),
-        h("p", { class: "thanks-card__body", text: ctx.t("claim.success.missingBody") }),
+        "div",
+        { class: "pub-slip__body", attrs: { role: "status" } },
+        h("h2", { class: "pub-thanks__missing-title", text: t(copy.missingTitle) }),
+        h("p", { class: "pub-thanks__missing-body", text: t(copy.missingBody) }),
       );
+
+  const slip = h(
+    "article",
+    { class: "pub-slip", attrs: { "aria-labelledby": "pub-thanks-title" } },
+    h(
+      "header",
+      { class: "pub-slip__head" },
+      h(
+        "span",
+        { class: "pub-slip__brand" },
+        h("span", { class: "pub-slip__brand-icon", html: icon("cup", 18), attrs: { "aria-hidden": "true" } }),
+        h("span", { text: ctx.lang === "bn" ? "চানাস্তা" : "Chanasta" }),
+      ),
+      h("p", { class: "pub-slip__kicker", text: t(copy.slipKicker) }),
+      creator.is_demo ? pubStamp(ctx.t("demo.badge"), "demo", "store") : null,
+    ),
+    h(
+      "div",
+      { class: "pub-slip__intro" },
+      h("span", { class: "pub-slip__icon", html: icon("heart", 30), attrs: { "aria-hidden": "true" } }),
+      h("h1", { class: "pub-slip__title", id: "pub-thanks-title", text: t(copy.title) }),
+      h("p", { class: "pub-slip__lead", text: t(copy.body) }),
+    ),
+    summary,
+    h("div", { class: "pub-slip__tear", attrs: { "aria-hidden": "true" } }, h("span", { class: "pub-slip__tear-line" })),
+    h(
+      "footer",
+      { class: "pub-slip__stub" },
+      h("p", { class: "pub-slip__not-receipt", text: t(copy.notReceipt) }),
+      h("p", { class: "pub-slip__stub-note", text: t(copy.slipStub) }),
+    ),
+  );
 
   return h(
     "div",
-    { class: "thanks-page" },
-    h("span", { class: "thanks-page__mark", html: "☕", attrs: { "aria-hidden": "true" } }),
-    h("h1", { class: "thanks-page__title", text: context ? ctx.t("claim.success.title") : ctx.t("claim.success.missing") }),
-    h("p", { class: "thanks-page__body", text: ctx.t("claim.success.body") }),
-    summary,
+    { class: "pub-page pub-thanks" },
+    slip,
     h(
       "div",
-      { class: "thanks-page__actions" },
-      h(
-        "button",
-        { class: "btn btn--primary btn--block", attrs: { type: "button" }, on: { click: () => void share() } },
-        h("span", { class: "btn__icon", html: icon("share", 18) }),
-        h("span", { class: "btn__label", text: ctx.t("claim.thanks.share") }),
-      ),
-      linkButton({
-        href: ctx.href(`/@${slug}`),
-        label: ctx.t("claim.thanks.back"),
-        variant: "secondary",
-        block: true,
-        icon: "arrowLeft",
-      }),
+      { class: "pub-thanks__actions" },
+      pubButton({ label: t(copy.share), icon: "share", block: true, onClick: share }),
+      pubLink({ href: ctx.href(`/@${slug}`), label: t(copy.back), variant: "secondary", block: true, icon: "arrowLeft" }),
     ),
-    h("p", { class: "thanks-page__not-receipt", text: ctx.t("claim.success.notReceipt") }),
   );
 }

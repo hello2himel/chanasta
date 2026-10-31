@@ -1,80 +1,92 @@
 /**
  * `/dashboard/settings` — appearance, language, session, legal links and the
- * page-deletion danger zone. No export in MVP (Lead decision), no billing, no
- * notification preferences.
+ * page-deletion danger zone. No billing, no notification preferences, no export
+ * in MVP. Deletion is disabled in local demo mode (nothing is on a server).
  */
-import { h, openDialog, toast } from "../../lib/dom.ts";
+import { h, toast } from "../../lib/dom.ts";
 import { messageForError } from "../../lib/messages.ts";
+import { getThemePreference, type ThemePreference } from "../../lib/prefs.ts";
 import type { AppContext } from "../../lib/app.ts";
-import type { ThemePreference } from "../../lib/prefs.ts";
-import { icon } from "../../components/icons.ts";
-import { button, linkButton } from "../../components/ui.ts";
-import { languageToggle } from "../../components/layout.ts";
-import { dashboardHeading, dashboardPage, inlineBanner, loadOwnData } from "./common.ts";
+import {
+  appBanner,
+  appButton,
+  appDialog,
+  appField,
+  appLink,
+  appRadioGroup,
+  appSectionHead,
+} from "../../components/app/ui.ts";
+import { appCopyFor } from "../copy.app.ts";
+import { appShell, inlineError, loadOwnData, noPageContent } from "./common.ts";
 
 export async function renderDashboardSettings(ctx: AppContext): Promise<HTMLElement> {
+  const copy = appCopyFor(ctx.lang);
   const own = await loadOwnData(ctx);
+  if (!own.creator) return noPageContent(ctx, copy);
   const creator = own.creator;
-  const bannerSlot = h("div", { class: "banner-slot" });
+  const bannerSlot = h("div", { class: "app-banner-slot" });
 
-  const themeGroup = h("fieldset", { class: "radio-group" },
-    h("legend", { class: "radio-group__legend", text: ctx.t("dashboard.settings.theme") }),
-  );
-  const themes: { value: ThemePreference; key: string }[] = [
-    { value: "system", key: "theme.system" },
-    { value: "light", key: "theme.light" },
-    { value: "dark", key: "theme.dark" },
-  ];
-  const currentTheme = (document.documentElement.dataset.theme as ThemePreference | undefined) ?? "system";
-  for (const theme of themes) {
-    const input = h("input", {
-      class: "radio-group__input",
-      id: `theme-${theme.value}`,
-      attrs: { type: "radio", name: "theme", value: theme.value, checked: currentTheme === theme.value },
-    });
-    input.addEventListener("change", () => {
-      ctx.setTheme(theme.value);
-      toast(ctx.t("common.saved"));
-    });
-    themeGroup.append(
-      h("label", { class: "radio-group__option", attrs: { for: `theme-${theme.value}` } },
-        input,
-        h("span", { text: ctx.t(theme.key) }),
-      ),
-    );
-  }
-
+  // ---- appearance ---------------------------------------------------------
+  const theme = getThemePreference();
   const appearance = h(
     "section",
-    { class: "settings-section dash-panel", attrs: { "aria-labelledby": "settings-appearance" } },
-    h("h2", { class: "settings-section__title", id: "settings-appearance", text: ctx.t("dashboard.settings.appearance") }),
-    themeGroup,
-    h(
-      "div",
-      { class: "settings-row" },
-      h("span", { class: "settings-row__label", text: ctx.t("dashboard.settings.lang") }),
-      languageToggle(ctx),
-    ),
+    { class: "app-section", attrs: { "aria-labelledby": "settings-appearance" } },
+    appSectionHead({ title: copy.appearance, description: copy.appearanceBody, id: "settings-appearance" }),
+    appRadioGroup({
+      legend: copy.themeChoice,
+      name: "theme",
+      choices: [
+        { value: "system", label: copy.themeSystem },
+        { value: "light", label: copy.themeLight },
+        { value: "dark", label: copy.themeDark },
+      ],
+      value: theme,
+      onChange: (value) => {
+        ctx.setTheme(value as ThemePreference);
+        toast(copy.saved);
+      },
+    }),
   );
 
+  // ---- language -----------------------------------------------------------
+  const langButton = (value: "bn" | "en", label: string): HTMLElement => {
+    const active = ctx.lang === value;
+    return h("button", {
+      class: `app-langbtn${active ? " app-langbtn--active" : ""}`,
+      attrs: { type: "button", "aria-pressed": String(active), lang: value },
+      text: label,
+    });
+  };
+  const bnButton = langButton("bn", "বাংলা");
+  const enButton = langButton("en", "English");
+  bnButton.addEventListener("click", () => ctx.setLang("bn"));
+  enButton.addEventListener("click", () => ctx.setLang("en"));
+  const language = h(
+    "section",
+    { class: "app-section", attrs: { "aria-labelledby": "settings-language" } },
+    appSectionHead({ title: copy.languageL, id: "settings-language" }),
+    h("div", { class: "app-lang", attrs: { role: "group", "aria-label": copy.languageL } }, bnButton, enButton),
+  );
+
+  // ---- session ------------------------------------------------------------
   const session = h(
     "section",
-    { class: "settings-section dash-panel", attrs: { "aria-labelledby": "settings-session" } },
-    h("h2", { class: "settings-section__title", id: "settings-session", text: ctx.t("dashboard.settings.session") }),
+    { class: "app-section", attrs: { "aria-labelledby": "settings-session" } },
+    appSectionHead({ title: copy.sessionL, id: "settings-session" }),
     ctx.isDemoMode
-      ? h("p", { class: "settings-section__body", text: ctx.t("dashboard.settings.localSession") })
+      ? h("p", { class: "app-note", text: copy.localSession })
       : h(
           "div",
-          { class: "settings-row settings-row--column" },
-          h("p", { class: "settings-section__body", text: ctx.t("dashboard.settings.loggedInAs", { email: own.session?.email ?? "" }) }),
-          button({
-            label: ctx.t("nav.logout"),
+          { class: "app-session" },
+          h("p", { class: "app-session__email", text: copy.loggedInAs.replace("{email}", own.session?.email ?? "") }),
+          appButton({
+            label: copy.logout,
             variant: "secondary",
             size: "sm",
-            icon: "user",
+            icon: "logout-box-line",
             onClick: () => {
               void ctx.data.signOut().then(() => {
-                toast(ctx.t("nav.logout"));
+                toast(copy.logout);
                 ctx.navigate("/");
               });
             },
@@ -82,96 +94,86 @@ export async function renderDashboardSettings(ctx: AppContext): Promise<HTMLElem
         ),
   );
 
+  // ---- legal --------------------------------------------------------------
   const legal = h(
     "section",
-    { class: "settings-section dash-panel", attrs: { "aria-labelledby": "settings-legal" } },
-    h("h2", { class: "settings-section__title", id: "settings-legal", text: ctx.t("dashboard.settings.legal") }),
+    { class: "app-section", attrs: { "aria-labelledby": "settings-legal" } },
+    appSectionHead({ title: copy.legalL, id: "settings-legal" }),
     h(
       "ul",
-      { class: "settings-links" },
-      h("li", {}, linkButton({ href: ctx.href("/legal/terms"), label: ctx.t("footer.terms"), variant: "ghost", size: "sm" })),
-      h("li", {}, linkButton({ href: ctx.href("/legal/privacy"), label: ctx.t("footer.privacy"), variant: "ghost", size: "sm" })),
-      h("li", {}, linkButton({ href: ctx.href("/legal/how-it-works"), label: ctx.t("footer.howItWorks"), variant: "ghost", size: "sm" })),
+      { class: "app-legal-links" },
+      h("li", {}, appLink({ label: copy.terms, href: ctx.href("/legal/terms"), variant: "ghost", size: "sm", iconTrailing: "arrow-right-line" })),
+      h("li", {}, appLink({ label: copy.privacy, href: ctx.href("/legal/privacy"), variant: "ghost", size: "sm", iconTrailing: "arrow-right-line" })),
+      h("li", {}, appLink({ label: copy.howItWorks, href: ctx.href("/legal/how-it-works"), variant: "ghost", size: "sm", iconTrailing: "arrow-right-line" })),
     ),
   );
 
+  // ---- danger zone --------------------------------------------------------
+  const deleteAction = () => {
+    if (ctx.isDemoMode) return;
+    const confirmField = appField({
+      id: "delete-confirm",
+      label: copy.delConfirmHint.replace("{slug}", creator.slug),
+      mono: true,
+      placeholder: creator.slug,
+    });
+    void appDialog({
+      title: copy.delConfirmTitle,
+      description: copy.delConfirmBody,
+      content: confirmField.wrap,
+      destructive: true,
+      actions: [
+        { id: "cancel", label: copy.cancel, variant: "secondary" },
+        { id: "delete", label: copy.delYes, variant: "danger" },
+      ],
+      onAction: (id) => {
+        if (id === "delete" && confirmField.input.value.trim() !== creator.slug) {
+          confirmField.setError(copy.delConfirmHint.replace("{slug}", creator.slug));
+          confirmField.input.focus();
+          return false;
+        }
+        return true;
+      },
+    }).then((action) => {
+      if (action !== "delete") return;
+      void ctx.data
+        .softDeleteCreator(creator.id)
+        .then(() => {
+          toast(copy.delDone);
+          ctx.navigate("/");
+        })
+        .catch((error: unknown) => {
+          bannerSlot.replaceChildren(inlineError(messageForError(ctx, error)));
+        });
+    });
+  };
+
   const danger = h(
     "section",
-    { class: "settings-section settings-section--danger", attrs: { "aria-labelledby": "settings-danger" } },
-    h("h2", { class: "settings-section__title", id: "settings-danger", text: ctx.t("dashboard.settings.danger") }),
-    h("p", { class: "settings-section__body", text: ctx.t("dashboard.settings.deleteBody") }),
-    ctx.isDemoMode
-      ? h("p", { class: "field__helper", text: ctx.t("dashboard.settings.demoNoDelete") })
-      : creator
-        ? button({
-            label: ctx.t("dashboard.settings.delete"),
-            variant: "danger",
-            size: "sm",
-            icon: "trash",
-            onClick: () => {
-              void (async () => {
-                const input = h("input", {
-                  class: "field__control",
-                  id: "delete-confirm-slug",
-                  attrs: { type: "text", autocomplete: "off", spellcheck: "false", "aria-label": ctx.t("dashboard.settings.deleteConfirmLabel", { slug: creator.slug }) },
-                });
-                const content = h(
-                  "div",
-                  { class: "field" },
-                  h("label", { class: "field__label", attrs: { for: "delete-confirm-slug" }, text: ctx.t("dashboard.settings.deleteConfirmLabel", { slug: creator.slug }) }),
-                  input,
-                );
-                const action = await openDialog({
-                  title: ctx.t("dashboard.settings.delete"),
-                  description: ctx.t("dashboard.settings.deleteBody"),
-                  content,
-                  destructive: true,
-                  actions: [
-                    { id: "cancel", label: ctx.t("common.cancel"), variant: "secondary" },
-                    { id: "delete", label: ctx.t("dashboard.settings.delete"), variant: "danger" },
-                  ],
-                  onAction: (id) => {
-                    if (id === "delete" && input.value.trim() !== creator.slug) {
-                      input.setAttribute("aria-invalid", "true");
-                      input.focus();
-                      return false;
-                    }
-                    return true;
-                  },
-                });
-                if (action !== "delete") return;
-                try {
-                  await ctx.data.softDeleteCreator(creator.id);
-                  toast(ctx.t("dashboard.settings.deletedToast"));
-                  ctx.navigate("/");
-                } catch (error) {
-                  bannerSlot.replaceChildren(inlineBanner(ctx, { message: messageForError(ctx, error), tone: "error" }));
-                }
-              })();
-            },
-          })
-        : null,
+    { class: "app-section app-section--danger", attrs: { "aria-labelledby": "settings-danger" } },
+    appSectionHead({ title: copy.dangerT, description: copy.dangerBody, id: "settings-danger" }),
+    appButton({
+      label: copy.delBtn,
+      variant: "danger",
+      size: "sm",
+      icon: "delete-bin-line",
+      disabled: ctx.isDemoMode,
+      onClick: deleteAction,
+    }),
+    ctx.isDemoMode ? h("p", { class: "app-field__helper", text: copy.delDemoOff }) : null,
   );
 
   const content = h(
     "div",
-    {},
-    dashboardHeading(ctx, ctx.t("dashboard.settings.title"), ctx.t("dashboard.settings.demoNote"), [
-      creator
-        ? linkButton({ href: ctx.href(`/@${creator.slug}`), label: ctx.t("dashboard.viewPage"), variant: "ghost", size: "sm", icon: "external" })
-        : null,
-    ].filter(Boolean) as HTMLElement[]),
+    { class: "app-settings" },
     bannerSlot,
-    ctx.isDemoMode
-      ? h(
-          "div",
-          { class: "inline-banner inline-banner--warn", attrs: { role: "note" } },
-          h("span", { html: icon("info", 18) }),
-          h("p", { text: ctx.t("dashboard.settings.demoNote") }),
-        )
-      : null,
-    h("div", { class: "settings-grid" }, appearance, session, legal, danger),
+    appearance,
+    language,
+    session,
+    legal,
+    danger,
+    h("p", { class: "app-note app-note--foot", text: copy.footerNote }),
   );
 
-  return dashboardPage(ctx, { active: "settings", creator, signedIn: own.signedIn, content });
+  return appShell(ctx, { active: "settings", creator, copy, content });
 }

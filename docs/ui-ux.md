@@ -1,3 +1,5 @@
+> **Superseded for visuals (2026-11-01):** the coffee-theme redesign in [`redesign.md`](./redesign.md) is now the visual source of truth. This document remains useful for its accessibility, contrast and component-state research.
+
 # Chanasta — UI/UX design handoff
 
 **Status:** Phase 2 · implementation-ready · every screen and state is specified to be built without further design decisions

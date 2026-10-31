@@ -1,9 +1,19 @@
-/** Shared dashboard helpers: owner data loading, no-page state, shell wiring. */
-import { h, toast } from "../../lib/dom.ts";
+/**
+ * Shared creator-app shell + data loading.
+ *
+ * The global header/footer come from the Lead-owned chrome; this module renders
+ * the creator header (RemixIcon avatar, name, mono slug, status stamp), the route
+ * tabs and the page-content container in the coffee ledger language.
+ */
+import { h, copyText, toast } from "../../lib/dom.ts";
+import { formatDate } from "../../lib/format.ts";
 import type { AppContext } from "../../lib/app.ts";
 import type { Creator, PaymentMethod, Session, SupportClaim } from "../../lib/types.ts";
-import { button, emptyState, linkButton } from "../../components/ui.ts";
-import { demoBanner, renderDashboardShell, type DashboardSection } from "../../components/layout.ts";
+import { appAvatar, appButton, appDialog, appEmpty, appLink, appStamp, appTabs, appBanner } from "../../components/app/ui.ts";
+import { renderAppShareKit } from "../../components/app/share.ts";
+import type { ResolvedAppCopy } from "../copy.app.ts";
+
+export type DashboardSection = "inbox" | "profile" | "payments" | "settings";
 
 export interface OwnData {
   session: Session | null;
@@ -27,7 +37,13 @@ export async function loadClaims(ctx: AppContext, creator: Creator | null): Prom
   return ctx.data.listMyClaims(creator.id).catch(() => []);
 }
 
-export function countsOf(claims: SupportClaim[]): { all: number; unverified: number; confirmed: number; hidden: number; rejected: number } {
+export function countsOf(claims: SupportClaim[]): {
+  all: number;
+  unverified: number;
+  confirmed: number;
+  hidden: number;
+  rejected: number;
+} {
   return {
     all: claims.length,
     unverified: claims.filter((claim) => claim.status === "unverified").length,
@@ -37,65 +53,126 @@ export function countsOf(claims: SupportClaim[]): { all: number; unverified: num
   };
 }
 
-/** The "no page yet" state (also the local first-run dashboard). */
-export function noPageContent(ctx: AppContext): HTMLElement {
-  return h(
+function creatorStamp(creator: Creator, copy: ResolvedAppCopy): HTMLElement {
+  if (creator.status === "published") {
+    return appStamp({ label: copy.statusPublished, tone: "confirmed", icon: "checkbox-circle-line" });
+  }
+  if (creator.status === "suspended") {
+    return appStamp({ label: copy.statusSuspended, tone: "danger", icon: "alert-line" });
+  }
+  return appStamp({ label: copy.statusDraft, tone: "self", icon: "draft-line" });
+}
+
+export function creatorHeader(
+  ctx: AppContext,
+  options: { creator: Creator; copy: ResolvedAppCopy; onShare?: () => void },
+): HTMLElement {
+  const { creator, copy } = options;
+  const actions = h(
     "div",
-    { class: "dash-content" },
-    demoBanner(ctx, "demo.localDashboard"),
-    h("header", { class: "page-heading" },
-      h("h1", { class: "page-heading__title", text: ctx.t("dashboard.noPage") }),
-    ),
+    { class: "app-creator__actions" },
+    options.onShare
+      ? appButton({ label: copy.copyLink, variant: "secondary", size: "sm", icon: "share-line", onClick: options.onShare })
+      : null,
+    appLink({ label: copy.viewPage, href: ctx.href(`/@${creator.slug}`), variant: "ghost", size: "sm", icon: "external-link-line" }),
+  );
+
+  return h(
+    "header",
+    { class: "app-creator" },
     h(
       "div",
-      { class: "dash-panel" },
-      emptyState({
-        icon: "sparkle",
-        title: ctx.t("dashboard.noPage"),
-        body: ctx.t("dashboard.noPageBody"),
-        action: linkButton({
-          href: ctx.href("/onboarding"),
-          label: ctx.t("dashboard.noPageCta"),
-          variant: "primary",
-          icon: "plus",
-        }),
-      }),
-      ctx.isDemoMode ? h("p", { class: "dash-note", text: ctx.t("demo.localDashboard") }) : null,
+      { class: "app-creator__identity" },
+      appAvatar(creator.avatar_emoji, "lg", creator.display_name),
+      h(
+        "div",
+        { class: "app-creator__names" },
+        h("h1", { class: "app-creator__name", text: creator.display_name, attrs: { tabindex: "-1" } }),
+        h(
+          "div",
+          { class: "app-creator__meta" },
+          h("span", { class: "app-mono app-creator__slug", text: `@${creator.slug}`, attrs: { dir: "ltr" } }),
+          creatorStamp(creator, copy),
+          creator.published_at
+            ? h("span", { class: "app-creator__updated", text: formatDate(ctx.lang, creator.published_at) })
+            : null,
+        ),
+      ),
     ),
+    actions,
   );
 }
 
-/** Wrap dashboard content in the shell (sidebar + mobile tabs) + page container. */
-export function dashboardPage(
+export function appShell(
   ctx: AppContext,
   options: {
     active: DashboardSection;
     creator: Creator | null;
-    signedIn: boolean;
-    counts?: ReturnType<typeof countsOf>;
+    copy: ResolvedAppCopy;
+    counts?: { unverified: number };
     content: Node;
+    onShare?: () => void;
   },
 ): HTMLElement {
-  const content = h(
+  const share =
+    options.onShare ??
+    (() => {
+      if (!options.creator) return;
+      const url = `${ctx.origin}${ctx.href(`/@${options.creator.slug}`)}`;
+      void copyText(url).then((ok) => toast(ok ? options.copy.copiedLink : options.copy.copyFailed));
+    });
+  const items = [
+    { label: options.copy.navMessages, href: ctx.href("/dashboard"), active: options.active === "inbox", count: options.counts?.unverified },
+    { label: options.copy.navPayments, href: ctx.href("/dashboard/payments"), active: options.active === "payments" },
+    { label: options.copy.navProfile, href: ctx.href("/dashboard/profile"), active: options.active === "profile" },
+    { label: options.copy.navSettings, href: ctx.href("/dashboard/settings"), active: options.active === "settings" },
+  ];
+  return h(
     "div",
-    { class: "dash-content" },
-    ctx.isDemoMode && options.active !== "settings" ? demoBanner(ctx, "demo.localDashboard") : null,
-    options.content,
+    { class: "app-page" },
+    options.creator ? creatorHeader(ctx, { creator: options.creator, copy: options.copy, onShare: share }) : null,
+    appTabs({ items, ariaLabel: options.copy.navDashboard }),
+    h("div", { class: "app-page__content" }, options.content),
   );
-  return renderDashboardShell(ctx, {
-    active: options.active,
-    creator: options.creator,
-    counts: options.counts ? { unverified: options.counts.unverified, all: options.counts.all } : undefined,
-    content,
-    signedIn: options.signedIn,
+}
+
+export function noPageContent(ctx: AppContext, copy: ResolvedAppCopy): HTMLElement {
+  return h(
+    "div",
+    { class: "app-page" },
+    h(
+      "div",
+      { class: "app-page__content" },
+      appEmpty({
+        icon: "store-2-line",
+        title: copy.noPageTitle,
+        body: copy.noPageBody,
+        action: appLink({ label: copy.noPageCta, href: ctx.href("/onboarding"), variant: "primary", icon: "add-line" }),
+      }),
+      ctx.isDemoMode ? h("p", { class: "app-note", text: copy.demoNote }) : null,
+    ),
+  );
+}
+
+export async function openShareDialog(
+  ctx: AppContext,
+  options: { creator: Creator; methods: PaymentMethod[]; copy: ResolvedAppCopy },
+): Promise<void> {
+  await appDialog({
+    title: options.copy.shareTitle,
+    content: h("div", { class: "app-share-dialog" }, renderAppShareKit(ctx, options)),
+    actions: [{ id: "close", label: options.copy.close, variant: "secondary" }],
   });
 }
 
-/** Toast a successful mutation and re-render the current route. */
-export function afterMutation(ctx: AppContext, message: string, options: { undo?: () => Promise<void> } = {}): void {
+export function afterMutation(
+  ctx: AppContext,
+  message: string,
+  options: { undo?: () => Promise<void>; undoLabel?: string } = {},
+): void {
   if (options.undo) {
     toast(message, {
-      actionLabel: ctx.t("common.undo"),
+      actionLabel: options.undoLabel ?? "",
       onAction: () => {
         void options.undo?.().then(() => ctx.refresh());
       },
@@ -106,36 +183,6 @@ export function afterMutation(ctx: AppContext, message: string, options: { undo?
   ctx.refresh();
 }
 
-/** Standard dashboard page heading with up to two actions. */
-export function dashboardHeading(
-  ctx: AppContext,
-  title: string,
-  description: string,
-  actions: Node[] = [],
-): HTMLElement {
-  return h(
-    "header",
-    { class: "page-heading page-heading--dash" },
-    h("div", { class: "page-heading__text" },
-      h("h1", { class: "page-heading__title", text: title, attrs: { tabindex: "-1" } }),
-      h("p", { class: "page-heading__desc", text: description }),
-    ),
-    actions.length > 0 ? h("div", { class: "page-actions" }, ...actions) : null,
-  );
-}
-
-/** Inline banner used for blocked publish / save failures. */
-export function inlineBanner(
-  ctx: AppContext,
-  options: { message: string; actionLabel?: string; onAction?: () => void; tone?: "warn" | "error" },
-): HTMLElement {
-  const banner = h(
-    "div",
-    { class: `inline-banner inline-banner--${options.tone ?? "warn"}`, attrs: { role: "alert" } },
-    h("p", { text: options.message }),
-  );
-  if (options.actionLabel && options.onAction) {
-    banner.append(button({ label: options.actionLabel, variant: "secondary", size: "sm", onClick: options.onAction }));
-  }
-  return banner;
+export function inlineError(message: string): HTMLElement {
+  return appBanner({ tone: "error", body: message });
 }

@@ -4,6 +4,34 @@ All notable changes to Chanasta are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-11-01
+
+Coffee-theme, de-slopped redesign of the whole product (from a supplied five-board design).
+
+### Changed
+
+- **New visual language**: "roastery ledger" — jute paper, espresso ink, brass/caramel accent, Spectral
+  + Noto Serif Bengali typography, coffee token layer in `design/coffee.css`.
+- **Receipt motif**: the supporter page, poster, thanks slip and onboarding preview now share a
+  perforated "chai receipt" with punched notches; the landing page keeps a receipt specimen and the
+  money-path band as its only full-bleed moment.
+- **De-slopped UI**: no gradients, blur, rotated/decorative cards, emoji or mixed icon styles; a
+  tightened radius scale, two elevation levels, ledger rows instead of card stacks, and honest,
+  specific CTAs. **RemixIcon** replaces the old inline SVG set and every emoji avatar.
+- **Creator app**: onboarding rebuilt as a quiet 4-step rail with a RemixIcon avatar picker, live
+  receipt preview and decode stamps; dashboard rebuilt as a ledger (creator header with mono slug and
+  status stamp, claims ledger with private TxID revealed only on expand, profile/payments/settings in
+  the same language).
+- Landing, supporter, thanks, embed, 404, login and legal pages all rebuilt; header/footer/demo strip
+  restyled as a coffee ledger shell.
+
+### Fixed
+
+- Footer now stays pinned to the viewport on short pages.
+- `@import` ordering in `styles.css` (workstream stylesheets are now bundled instead of dropped).
+- Claim details are removed from the DOM when collapsed, so a private TxID cannot be exposed by CSS.
+- Print poster uses the receipt layout, serif print families and no emoji.
+
 ## [0.1.0] — 2026-11-01
 
 First public release. A Bangla-first "buy me a coffee" that never touches money.

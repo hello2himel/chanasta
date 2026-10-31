@@ -8,6 +8,7 @@ import type { ClaimStatus, Lang, PaymentMethod, PaymentQrStatus } from "../lib/t
 import type { AppContext } from "../lib/app.ts";
 import { cx } from "../lib/app.ts";
 import { icon, steamMark, type IconName } from "./icons.ts";
+import { avatarIconClass } from "../lib/avatars.ts";
 
 // ---- buttons / links ------------------------------------------------------
 
@@ -161,12 +162,19 @@ export function qrStatusBadge(ctx: AppContext, status: PaymentQrStatus, kind: Pa
 
 // ---- avatar ---------------------------------------------------------------
 
-export function avatar(emoji: string, size: "sm" | "md" | "lg" | "xl" = "md", label?: string): HTMLSpanElement {
-  return h("span", {
-    class: cx("avatar", `avatar--${size}`),
-    text: emoji,
-    attrs: label ? { role: "img", "aria-label": label } : { "aria-hidden": "true" },
+export function avatar(value: string, size: "sm" | "md" | "lg" | "xl" = "md", label?: string): HTMLSpanElement {
+  const name = `avatar avatar--${size}`;
+  const span = h("span", {
+    class: name,
+    html: `<i class="${avatarIconClass(value)} ri" aria-hidden="true"></i>`,
   });
+  if (label) {
+    span.setAttribute("role", "img");
+    span.setAttribute("aria-label", label);
+  } else {
+    span.setAttribute("aria-hidden", "true");
+  }
+  return span;
 }
 
 // ---- surfaces -------------------------------------------------------------
