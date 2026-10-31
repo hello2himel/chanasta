@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Chanasta">
+  <rect width="64" height="64" rx="14" fill="#fbf6ec"/>
+  <g fill="none" stroke="#b5431f" stroke-width="3.2" stroke-linecap="round">
+    <path d="M18 30h28v10a12 12 0 0 1-12 12h-4a12 12 0 0 1-12-12V30Z"/>
+    <path d="M14 30h36"/>
+    <path d="M25 22c-3 3 3 5 0 8M33 18c-3 3 3 5 0 8"/>
+  </g>
+</svg>

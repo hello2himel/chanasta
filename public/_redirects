@@ -1,0 +1,11 @@
+# Chanasta SPA fallbacks (Netlify). Every client route serves index.html with 200
+# so deep links work; /assets/* is served by the static host before these rules.
+/            /index.html   200
+/onboarding  /index.html   200
+/login       /index.html   200
+/dashboard   /index.html   200
+/dashboard/* /index.html   200
+/@*          /index.html   200
+/embed/*     /index.html   200
+/legal/*     /index.html   200
+/*           /index.html   200

@@ -1,0 +1,7 @@
+# Chanasta — public support pages are indexable; the creator dashboard is not.
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /onboarding

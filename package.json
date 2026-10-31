@@ -1,0 +1,30 @@
+{
+  "name": "chanasta",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chanasta \u2014 treat your favourite creator to a cup of cha and snacks. We never process payments.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "packageManager": "pnpm@12.15.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "sync:deshiqr": "node scripts/sync-deshiqr.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
+    "jsqr": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "@electric-sql/pglite": "^0.5.14"
+  }
+}
