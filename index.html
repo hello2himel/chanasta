@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="bn">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>চানাস্তা — এক কাপ চা, অনেক ভালোবাসা</title>
+    <meta name="description" content="ক্রিয়েটরদের জন্য একটি পাবলিক সাপোর্ট পেজ। নিজের বিকাশ QR ও পেমেন্ট তথ্য দিন — টাকা সোজা আপনার অ্যাকাউন্টে যায়। চানাস্তা পেমেন্ট প্রসেস করে না।" />
+    <meta name="theme-color" content="#fbf6ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#12100d" media="(prefers-color-scheme: dark)" />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Chanasta" />
+    <meta property="og:title" content="চানাস্তা — এক কাপ চা, অনেক ভালোবাসা" />
+    <meta property="og:description" content="Buy me a cha, Bangladesh. Supporters send money straight to the creator's own account — Chanasta is not a payment processor." />
+    <meta property="og:locale" content="bn_BD" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400..700&family=Noto+Sans+Bengali:wght@400..700&display=swap"
+    />
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem("chanasta.theme");
+          if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+          var lang = localStorage.getItem("chanasta.lang");
+          if (lang === "en" || lang === "bn") document.documentElement.lang = lang;
+        } catch (error) {
+          /* storage unavailable: keep the Bangla/system defaults */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">মূল অংশে যান / Skip to content</a>
+    <div id="app"></div>
+    <noscript>
+      <div class="main">
+        <h1>চানাস্তা — এক কাপ চা, অনেক ভালোবাসা</h1>
+        <p>
+          এটি চানাস্তার ডেমো। পেজ ও QR দেখাতে জাভাস্ক্রিপ্ট দরকার। ক্রিয়েটরের পেজে গিয়ে দেখুন।
+        </p>
+        <p lang="en">
+          This is the Chanasta demo. JavaScript is needed to show pages and QR codes. Open a creator's page directly.
+        </p>
+        <p>
+          <a href="%BASE_URL%@demo-teacher">ডেমো শিক্ষক · @demo-teacher</a><br />
+          <a href="%BASE_URL%@demo-artist">ডেমো শিল্পী · @demo-artist</a><br />
+          <a href="%BASE_URL%@demo-writer">ডেমো লেখক · @demo-writer</a>
+        </p>
+        <p lang="en">
+          Chanasta is not a payment processor. Money goes directly to the creator's own account.
+        </p>
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

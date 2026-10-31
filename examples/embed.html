@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Chanasta embed demo — @demo-teacher (synthetic)</title>
+  <meta
+    name="description"
+    content="Demo page for the Chanasta iframe embed. Uses the synthetic demo teacher only. Chanasta is not a payment processor and never touches money."
+  />
+  <style>
+    :root {
+      --bg: #fbf6ee;
+      --surface: #fffaf2;
+      --raised: #ffffff;
+      --ink: #2c2419;
+      --muted: #6f6252;
+      --line: #e6dccd;
+      --accent: #a34d16;
+      --accent-soft: #f4e3d3;
+      --focus: #1f5fbf;
+      --radius: 20px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #171310;
+        --surface: #1f1a15;
+        --raised: #262019;
+        --ink: #f6efe6;
+        --muted: #c4b7a7;
+        --line: #3a3128;
+        --accent: #f0a068;
+        --accent-soft: #3a2a1d;
+        --focus: #8ab4ff;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Figtree", "Hind Siliguri", "Noto Sans Bengali", system-ui, -apple-system,
+        "Segoe UI", Roboto, sans-serif;
+      line-height: 1.55;
+      padding: clamp(1rem, 4vw, 3rem) 1rem 4rem;
+    }
+    main { max-width: 46rem; margin: 0 auto; }
+    h1 { font-size: clamp(1.5rem, 4vw, 2.1rem); line-height: 1.2; margin: 0 0 0.5rem; }
+    h2 { font-size: 1.05rem; margin: 2rem 0 0.5rem; }
+    p { margin: 0.5rem 0; }
+    .demo-badge {
+      display: inline-block;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .lede { color: var(--muted); }
+    .embed-frame {
+      margin: 1.25rem 0;
+      padding: 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      max-width: 26rem;
+    }
+    iframe {
+      display: block;
+      width: 100%;
+      height: 640px;
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) - 6px);
+      background: var(--raised);
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 1rem 0; }
+    button,
+    .button-link {
+      font: inherit;
+      font-weight: 600;
+      min-height: 44px;
+      padding: 0.6rem 1rem;
+      border-radius: 999px;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .button-link {
+      background: transparent;
+      color: var(--accent);
+    }
+    button:hover,
+    .button-link:hover { filter: brightness(1.06); }
+    :is(button, .button-link):focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+    pre {
+      overflow-x: auto;
+      padding: 0.9rem;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .disclosure {
+      margin-top: 2.5rem;
+      padding: 1rem 1.1rem;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 14px;
+      font-size: 0.92rem;
+    }
+    .disclosure p + p { margin-top: 0.6rem; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    [lang="bn"] { font-family: "Hind Siliguri", "Noto Sans Bengali", sans-serif; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="demo-badge">Synthetic demo · ডেমো</p>
+    <h1>Chanasta embed — <span lang="en">@demo-teacher</span></h1>
+    <p class="lede">
+      This page demonstrates the optional <strong>iframe embed</strong>. It loads the compact,
+      iframe-friendly card for the synthetic demo creator <code>@demo-teacher</code>. All names,
+      accounts and QR payloads are fake.
+    </p>
+
+    <h2>Iframe</h2>
+    <div class="embed-frame">
+      <iframe
+        id="chanasta-embed"
+        title="চানাস্তা — ডেমো শিক্ষক (DEMO Teacher) support page"
+        width="100%"
+        height="640"
+        loading="lazy"
+        referrerpolicy="strict-origin-when-cross-origin"
+        allow="clipboard-write"
+        src="https://chanasta.example/embed/@demo-teacher"
+      ></iframe>
+    </div>
+
+    <p class="muted">
+      Point this demo at your own deployment by appending
+      <code>?origin=https://your-site.example&amp;slug=demo-artist</code> to this page's URL.
+      The iframe source is then <code>https://your-site.example/embed/@demo-artist</code>.
+    </p>
+
+    <div class="actions">
+      <button type="button" id="copy-embed">Copy iframe snippet</button>
+      <a class="button-link" id="open-page" href="https://chanasta.example/@demo-teacher">
+        Open the full page ↗
+      </a>
+    </div>
+    <p class="muted" id="copy-status" role="status" aria-live="polite"></p>
+
+    <h2>Copy-paste snippet</h2>
+    <pre><code id="snippet"></code></pre>
+
+    <div class="disclosure">
+      <p lang="bn">
+        চানাস্তা কোনো পেমেন্ট প্রসেস করে না। টাকা সরাসরি ক্রিয়েটরের নিজের অ্যাকাউন্টে যায়; চানাস্তা
+        টাকা রাখে না, পাঠায় না, ফেরত দেয় না, নিশ্চিতও করে না।
+      </p>
+      <p>
+        Chanasta is not a payment processor. Money goes directly to the creator's own account; Chanasta
+        never holds, routes, refunds or confirms it. Support claims are self-reported messages, not
+        receipts.
+      </p>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var params = new URLSearchParams(window.location.search);
+      var origin = (params.get("origin") || "https://chanasta.example").replace(/\/+$/, "");
+      var slug = (params.get("slug") || "demo-teacher").replace(/^@/, "");
+
+      // Demo data only: keep this page pointed at the synthetic creators.
+      var allowed = ["demo-teacher", "demo-artist", "demo-writer"];
+      if (allowed.indexOf(slug) === -1) {
+        slug = "demo-teacher";
+      }
+
+      var embedUrl = origin + "/embed/@" + encodeURIComponent(slug);
+      var pageUrl = origin + "/@" + encodeURIComponent(slug);
+
+      var iframe = document.getElementById("chanasta-embed");
+      var openLink = document.getElementById("open-page");
+      var snippet = document.getElementById("snippet");
+      var copyButton = document.getElementById("copy-embed");
+      var copyStatus = document.getElementById("copy-status");
+
+      if (iframe) {
+        iframe.src = embedUrl;
+        iframe.title = "চানাস্তা — " + slug + " support page (synthetic demo)";
+      }
+      if (openLink) {
+        openLink.href = pageUrl;
+      }
+
+      var snippetText =
+        '<iframe\n' +
+        '  src="' + embedUrl + '"\n' +
+        '  title="Chanasta support page — @' + slug + ' (synthetic demo)"\n' +
+        '  width="100%" height="640" loading="lazy"\n' +
+        '  referrerpolicy="strict-origin-when-cross-origin"\n' +
+        '  style="border:1px solid #e6dccd; border-radius:20px; max-width:420px"\n' +
+        '></iframe>';
+      if (snippet) {
+        snippet.textContent = snippetText;
+      }
+
+      if (copyButton) {
+        copyButton.addEventListener("click", function () {
+          function done() {
+            copyStatus.textContent = "Copied. Remember: demo data only.";
+          }
+          function failed() {
+            copyStatus.textContent = "Copy failed — select the snippet above and copy it manually.";
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(snippetText).then(done, failed);
+          } else {
+            failed();
+          }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

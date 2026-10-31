@@ -1,0 +1,689 @@
+/* ==========================================================================
+   Chanasta — design tokens
+   --------------------------------------------------------------------------
+   Single source of truth for colour, type, spacing, motion and component
+   values. Drop this file in as the first stylesheet; it has no imports, no
+   build step and no dependencies.
+
+       <link rel="stylesheet" href="/design/tokens.css">
+
+   Theme: light by default (warm paper). Dark applies when
+   <html data-theme="dark"> is set, or automatically when the OS asks for
+   dark and data-theme is not pinned to "light".
+
+   Rules honoured here:
+   - Bangla is primary. Noto Sans Bengali carries Bengali + ৳ + Bengali
+     digits; Figtree carries Latin text and all numerals (it has tabular
+     figures). Bengali glyphs fall through to Noto Sans Bengali because
+     Figtree has no Bengali coverage.
+   - The QR is never inverted for dark mode. A QR must stay dark-on-white to
+     scan in the real world.
+   - Money is never on our path. No token, state or colour implies a payment
+     succeeding, being confirmed or being held by Chanasta.
+   - WCAG 2.1 AA: measured contrast ratios are documented in docs/ui-ux.md §7.
+   - Values are literal hex/rgba on purpose: no color-mix(), no light-dark()
+     (support is still uneven on older mid-range Android browsers).
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* ========================================================================
+     1. TYPEFACES
+     Google Fonts URL used by the app (load with display=swap, preconnect to
+     fonts.gstatic.com):
+     https://fonts.googleapis.com/css2?family=Figtree:wght@400..700&family=Noto+Sans+Bengali:wght@400..700&display=swap
+     Two variable files, ~126 KB together: Figtree latin (20 KB) +
+     Noto Sans Bengali bengali (108 KB). ৳ is only in the Bengali file, so
+     every amount span must use --font-num and allow that fallback.
+     ======================================================================== */
+  --font-sans: "Figtree", "Noto Sans Bengali", system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-bn: var(--font-sans);
+  --font-en: var(--font-sans);
+  --font-num: "Figtree", "Noto Sans Bengali", system-ui, -apple-system, "Segoe UI",
+    Roboto, Arial, sans-serif;
+  --font-display: "Figtree", "Noto Sans Bengali", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  --font-emoji: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ========================================================================
+     2. TYPE SCALE
+     Sizes are static; display sizes are fluid (clamp) so Bangla headlines do
+     not overflow 360 px. Line-heights are set per role and switched by
+     language: Bangla needs more leading for matras and conjuncts.
+     ======================================================================== */
+  --text-2xs: 0.6875rem; /* 11 px — only for dense dashboard meta */
+  --text-xs: 0.75rem; /* 12 px — badges, timestamps, helper text */
+  --text-sm: 0.875rem; /* 14 px — secondary body, disclosure strip */
+  --text-base: 1rem; /* 16 px — body */
+  --text-lg: 1.125rem; /* 18 px — section lead */
+  --text-xl: 1.25rem; /* 20 px — card title */
+  --text-2xl: 1.5rem; /* 24 px — section heading */
+  --text-3xl: 1.875rem; /* 30 px — page heading (desktop) */
+  --text-4xl: 2.25rem; /* 36 px — hero (desktop) */
+  --text-5xl: 3rem; /* 48 px — landing hero only, Latin */
+
+  --text-h1: clamp(1.7rem, 1.1rem + 2.4vw, 2.5rem);
+  --text-h2: clamp(1.375rem, 1.15rem + 1.1vw, 1.875rem);
+  --text-h3: 1.125rem;
+  --text-display: clamp(2rem, 1.2rem + 3.6vw, 3.25rem);
+
+  --leading-heading-en: 1.2;
+  --leading-heading-bn: 1.35;
+  --leading-body-en: 1.55;
+  --leading-body-bn: 1.8;
+  --leading-ui-en: 1.3;
+  --leading-ui-bn: 1.45;
+  --leading-badge-en: 1.2;
+  --leading-badge-bn: 1.3;
+  --leading-none: 1;
+
+  /* Language-aware aliases: components use these, never the raw pair. */
+  --leading-heading: var(--leading-heading-en);
+  --leading-body: var(--leading-body-en);
+  --leading-ui: var(--leading-ui-en);
+  --leading-badge: var(--leading-badge-en);
+
+  --tracking-display: -0.02em;
+  --tracking-heading-bn: 0;
+  --tracking-body: 0;
+  --tracking-label: 0.01em;
+
+  /* Amounts: Latin digits, tabular figures, lining figures. Verified:
+     Figtree's latin subset contains the OpenType `tnum` feature. `tnum` also
+     means the ৳ glyph (from Noto Sans Bengali) is the only non-Figtree glyph
+     in an amount string — keep it at weight ≤ 600 and test ৳20 / ৳1,000. */
+  --amount-font: var(--font-num);
+  --amount-weight: 700;
+  --amount-tracking: -0.01em;
+  --amount-feature-settings: "tnum" 1, "lnum" 1;
+  --amount-size-xl: 2.25rem;
+  --amount-size-lg: 1.5rem;
+  --amount-size-md: 1.125rem;
+  --amount-size-sm: 0.9375rem;
+  --amount-taka-gap: 0.02em;
+
+  /* ========================================================================
+     3. COLOUR — light
+     Warm paper + clay. No fintech blue, no provider brand colours.
+     Semantic pairs (documented, measured in docs/ui-ux.md §7):
+     ink/bg 15.3 · muted/bg 5.8 · on-accent/accent 5.5 · accent-ink/soft 6.6
+     ======================================================================== */
+  --bg: #fbf6ec;
+  --surface: #ffffff;
+  --raised: #f3e9d8;
+  --ink: #241e17;
+  --muted: #6b5f4f;
+  --line: #e3d5bf;
+  --line-strong: #9b8a6f;
+
+  --accent: #b5431f;
+  --accent-hover: #9e3817;
+  --accent-active: #8a2f12;
+  --accent-soft: #f8e6dc;
+  --accent-ink: #8e3315;
+  --on-accent: #ffffff;
+
+  --success: #1e6b4c;
+  --success-soft: #ddefe5;
+  --warn: #7a4b00;
+  --warn-soft: #fbedd1;
+  --danger: #a51c2c;
+  --danger-strong: #a51c2c;
+  --danger-hover: #8c1625;
+  --danger-soft: #fbe3e5;
+
+  --focus: #0b5f73;
+
+  --qr-fg: #0b0b0b;
+  --qr-bg: #ffffff;
+
+  --overlay: rgba(36, 30, 23, 0.55);
+  --selection-bg: #f8e6dc;
+  --selection-ink: #241e17;
+  --shadow-color: rgba(64, 42, 20, 0.1);
+
+  /* ========================================================================
+     4. COLOUR — dark
+     Warm charcoal, never pure black; accent flips to a lighter amber so it
+     keeps contrast against warm surfaces. QR stays white-on-dark text.
+     ======================================================================== */
+  --bg-dark: #12100d;
+  --surface-dark: #1d1813;
+  --raised-dark: #29221b;
+  --ink-dark: #f7efe3;
+  --muted-dark: #c0b2a0;
+  --line-dark: #453b31;
+  --line-strong-dark: #7b6e5c;
+
+  --accent-dark: #f0a46b;
+  --accent-hover-dark: #f7b87e;
+  --accent-active-dark: #ffc79a;
+  --accent-soft-dark: #3b2a1e;
+  --accent-ink-dark: #f6b98c;
+  --on-accent-dark: #1a1009;
+
+  --success-dark: #7cd6a8;
+  --success-soft-dark: #16301f;
+  --warn-dark: #f2c879;
+  --warn-soft-dark: #33260f;
+  --danger-dark: #ff9aa2;
+  --danger-strong-dark: #c9404c;
+  --danger-hover-dark: #b33540;
+  --danger-soft-dark: #3a1a1e;
+
+  --focus-dark: #8fd8e8;
+
+  --overlay-dark: rgba(0, 0, 0, 0.65);
+  --selection-bg-dark: #3b2a1e;
+  --selection-ink-dark: #f7efe3;
+  --shadow-color-dark: rgba(0, 0, 0, 0.45);
+
+  /* ========================================================================
+     5. SPACING (4 px base grid)
+     ======================================================================== */
+  --space-0: 0;
+  --space-1: 0.25rem; /*  4 px */
+  --space-2: 0.5rem; /*  8 px */
+  --space-3: 0.75rem; /* 12 px */
+  --space-4: 1rem; /* 16 px */
+  --space-5: 1.25rem; /* 20 px */
+  --space-6: 1.5rem; /* 24 px */
+  --space-7: 2rem; /* 32 px */
+  --space-8: 2.5rem; /* 40 px */
+  --space-9: 3rem; /* 48 px */
+  --space-10: 4rem; /* 64 px */
+  --space-11: 5rem; /* 80 px */
+  --space-12: 6rem; /* 96 px */
+
+  --tap-min: 44px;
+  --tap-comfortable: 48px;
+
+  /* ========================================================================
+     6. RADII, BORDERS, SHADOWS
+     Soft clay-card geometry; borders do most of the work, shadows are light.
+     ======================================================================== */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+
+  --hairline: 1px;
+  --border-width: 1px;
+  --border-width-strong: 2px;
+  --border: var(--border-width) solid var(--line);
+  --border-strong: var(--border-width) solid var(--line-strong);
+
+  --shadow-xs: 0 1px 2px var(--shadow-color);
+  --shadow-sm: 0 1px 2px var(--shadow-color), 0 2px 8px var(--shadow-color);
+  --shadow-md: 0 2px 4px var(--shadow-color), 0 8px 24px var(--shadow-color);
+  --shadow-lg: 0 4px 8px var(--shadow-color), 0 20px 48px var(--shadow-color);
+
+  --focus-width: 2px;
+  --focus-offset: 2px;
+  --focus-ring: var(--focus-width) solid var(--focus);
+
+  /* ========================================================================
+     7. MOTION
+     Calm, short, never bouncy. Reduced motion collapses durations and travel.
+     ======================================================================== */
+  --duration-instant: 80ms;
+  --duration-fast: 140ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-entrance: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-distance: 8px;
+  --motion-scale-press: 0.985;
+
+  /* ========================================================================
+     8. Z-INDEX
+     ======================================================================== */
+  --z-below: -1;
+  --z-base: 0;
+  --z-raised: 1;
+  --z-sticky: 20;
+  --z-header: 30;
+  --z-dropdown: 40;
+  --z-overlay: 60;
+  --z-dialog: 70;
+  --z-toast: 90;
+  --z-skip-link: 100;
+
+  /* ========================================================================
+     9. LAYOUT
+     Breakpoints are literals here for JS/documentation; CSS media queries
+     must use the same literal values (custom properties do not work inside
+     @media). --bp-* exist so JS and tests share one source of truth.
+     ======================================================================== */
+  --bp-sm: 30rem; /* 480 px */
+  --bp-md: 48rem; /* 768 px */
+  --bp-lg: 64rem; /* 1024 px */
+  --bp-xl: 80rem; /* 1280 px */
+
+  --layout-page-max: 75rem; /* 1200 px — landing, header, footer */
+  --layout-supporter-max: 68rem; /* 1088 px — supporter desktop grid */
+  --layout-dashboard-max: 72rem; /* 1152 px — dashboard shell */
+  --layout-form-max: 34rem; /* 544 px — single-column forms */
+  --layout-prose-max: 40rem; /* 640 px — legal pages */
+  --layout-measure: 62ch; /* body text measure */
+  --layout-gutter: var(--space-4);
+  --layout-gutter-lg: var(--space-6);
+
+  --header-height: 56px;
+  --header-height-lg: 68px;
+  --header-bg: var(--bg);
+  --header-border: var(--border);
+  --header-ink: var(--ink);
+
+  --sticky-action-height: 72px; /* dashboard save bar + safe-area padding */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* ========================================================================
+     10. COMPONENT TOKENS
+     Implementers consume these, not the raw palette, inside components.
+     ======================================================================== */
+
+  /* --- Buttons ------------------------------------------------------------ */
+  --button-height: 48px;
+  --button-height-sm: 44px;
+  --button-padding-x: var(--space-5);
+  --button-padding-x-sm: var(--space-4);
+  --button-gap: var(--space-2);
+  --button-radius: var(--radius-pill);
+  --button-font-size: var(--text-base);
+  --button-font-size-sm: var(--text-sm);
+  --button-font-weight: var(--weight-semibold);
+  --button-icon-size: 18px;
+  --button-primary-bg: var(--accent);
+  --button-primary-bg-hover: var(--accent-hover);
+  --button-primary-bg-active: var(--accent-active);
+  --button-primary-ink: var(--on-accent);
+  --button-primary-border: transparent;
+  --button-secondary-bg: var(--surface);
+  --button-secondary-bg-hover: var(--raised);
+  --button-secondary-ink: var(--ink);
+  --button-secondary-border: var(--line-strong);
+  --button-ghost-bg: transparent;
+  --button-ghost-bg-hover: var(--raised);
+  --button-ghost-ink: var(--ink);
+  --button-danger-bg: var(--danger-strong);
+  --button-danger-bg-hover: var(--danger-hover);
+  --button-danger-ink: #ffffff;
+  --button-disabled-bg: var(--raised);
+  --button-disabled-ink: var(--muted);
+  --button-disabled-border: var(--line);
+
+  /* --- Links -------------------------------------------------------------- */
+  --link-ink: var(--accent-ink);
+  --link-ink-hover: var(--accent);
+  --link-decoration: underline;
+  --link-decoration-thickness: 1px;
+  --link-underline-offset: 0.18em;
+
+  /* --- Amount chips ------------------------------------------------------- */
+  --chip-height: 56px;
+  --chip-radius: var(--radius-md);
+  --chip-padding-x: var(--space-3);
+  --chip-gap: var(--space-2);
+  --chip-bg: var(--surface);
+  --chip-bg-hover: var(--raised);
+  --chip-border-color: var(--line-strong);
+  --chip-ink: var(--ink);
+  --chip-muted: var(--muted);
+  --chip-selected-bg: var(--accent-soft);
+  --chip-selected-border-color: var(--accent);
+  --chip-selected-ink: var(--accent-ink);
+  --chip-amount-font-size: 1.0625rem;
+  --chip-label-font-size: var(--text-xs);
+
+  /* --- Form fields -------------------------------------------------------- */
+  --field-height: 48px;
+  --field-radius: var(--radius-md);
+  --field-padding-x: var(--space-3);
+  --field-bg: var(--surface);
+  --field-bg-disabled: var(--raised);
+  --field-ink: var(--ink);
+  --field-placeholder: var(--muted);
+  --field-border-color: var(--line-strong);
+  --field-border-error-color: var(--danger);
+  --field-font-size: var(--text-base);
+  --field-textarea-min-height: 96px;
+  --field-helper-ink: var(--muted);
+  --field-helper-size: var(--text-sm);
+  --field-error-ink: var(--danger);
+  --field-label-size: var(--text-sm);
+  --field-label-weight: var(--weight-semibold);
+  --field-gap: var(--space-2);
+  --field-group-gap: var(--space-5);
+
+  /* --- Copy field + reveal ------------------------------------------------ */
+  --copy-field-bg: var(--raised);
+  --copy-field-ink: var(--ink);
+  --copy-field-border-color: var(--line);
+  --copy-field-radius: var(--radius-md);
+  --copy-button-size: var(--tap-min);
+  --copy-button-radius: var(--radius-sm);
+
+  /* --- QR panel ----------------------------------------------------------- */
+  --qr-size: min(76vw, 264px);
+  --qr-size-sm: 200px;
+  --qr-size-lg: 280px;
+  --qr-panel-bg: var(--surface);
+  --qr-panel-border-color: var(--line);
+  --qr-panel-radius: var(--radius-xl);
+  --qr-panel-padding: var(--space-4);
+  --qr-panel-shadow: var(--shadow-sm);
+  --qr-plate-bg: #ffffff;
+  --qr-plate-radius: var(--radius-md);
+  --qr-plate-padding: var(--space-3);
+  --qr-quiet-zone: 28px; /* true quiet zone = 4 modules; the QR SVG's own margin=4 already provides it — never crop it */
+
+  /* --- Badges ------------------------------------------------------------- */
+  --badge-height: 24px;
+  --badge-padding-x: var(--space-2);
+  --badge-radius: var(--radius-pill);
+  --badge-gap: var(--space-1);
+  --badge-font-size: var(--text-xs);
+  --badge-font-weight: var(--weight-semibold);
+  --badge-icon-size: 12px;
+  --badge-neutral-bg: var(--raised);
+  --badge-neutral-ink: #5f5344;
+  --badge-selfreported-bg: var(--warn-soft);
+  --badge-selfreported-ink: var(--warn);
+  --badge-confirmed-bg: var(--success-soft);
+  --badge-confirmed-ink: var(--success);
+  --badge-danger-bg: var(--danger-soft);
+  --badge-danger-ink: var(--danger);
+  --badge-demo-bg: var(--warn-soft);
+  --badge-demo-ink: var(--warn);
+
+  /* --- Claim cards -------------------------------------------------------- */
+  --claim-card-bg: var(--surface);
+  --claim-card-border-color: var(--line);
+  --claim-card-radius: var(--radius-lg);
+  --claim-card-padding: var(--space-4);
+  --claim-card-gap: var(--space-2);
+  --claim-amount-size: 1.5rem;
+  --claim-meta-ink: var(--muted);
+  --claim-meta-size: var(--text-xs);
+
+  /* --- Disclosure strip (honesty surface) --------------------------------- */
+  --disclosure-bg: var(--accent-soft);
+  --disclosure-ink: var(--ink);
+  --disclosure-border-color: var(--accent);
+  --disclosure-border-width: 3px;
+  --disclosure-radius: var(--radius-md);
+  --disclosure-padding: var(--space-4);
+  --disclosure-font-size: var(--text-sm);
+  --disclosure-icon-size: 18px;
+
+  /* --- Payment method cards ---------------------------------------------- */
+  --method-card-bg: var(--surface);
+  --method-card-border-color: var(--line);
+  --method-card-radius: var(--radius-lg);
+  --method-card-padding: var(--space-4);
+  --method-card-gap: var(--space-3);
+  --method-account-font: var(--font-num);
+  --method-account-size: 1.0625rem;
+  --method-account-weight: var(--weight-semibold);
+
+  /* --- Language toggle ---------------------------------------------------- */
+  --lang-toggle-height: var(--tap-min);
+  --lang-toggle-padding-x: var(--space-3);
+  --lang-toggle-radius: var(--radius-pill);
+  --lang-toggle-bg: transparent;
+  --lang-toggle-bg-hover: var(--raised);
+  --lang-toggle-ink: var(--ink);
+  --lang-toggle-border-color: var(--line);
+  --lang-toggle-font-size: var(--text-sm);
+
+  /* --- Header / footer ---------------------------------------------------- */
+  --brand-mark-size: 22px;
+  --brand-ink: var(--ink);
+  --nav-link-ink: var(--muted);
+  --nav-link-ink-hover: var(--ink);
+  --footer-bg: var(--bg);
+  --footer-ink: var(--muted);
+  --footer-font-size: var(--text-xs);
+  --footer-gap: var(--space-3);
+
+  /* --- Toasts ------------------------------------------------------------- */
+  --toast-bg: var(--ink);
+  --toast-ink: var(--bg);
+  --toast-radius: var(--radius-pill);
+  --toast-padding: var(--space-3) var(--space-5);
+  --toast-font-size: var(--text-sm);
+  --toast-shadow: var(--shadow-md);
+  --toast-duration: 3200ms;
+  --toast-gap: var(--space-2);
+
+  /* --- Dialogs / sheets --------------------------------------------------- */
+  --dialog-bg: var(--surface);
+  --dialog-radius: var(--radius-xl);
+  --dialog-padding: var(--space-6);
+  --dialog-max-width: 30rem;
+  --dialog-gap: var(--space-5);
+  --dialog-shadow: var(--shadow-lg);
+  --overlay-bg: var(--overlay);
+
+  /* --- Skeletons / loading ------------------------------------------------ */
+  --skeleton-bg: var(--raised);
+  --skeleton-shine: var(--accent-soft);
+  --skeleton-radius: var(--radius-sm);
+  --skeleton-duration: 1400ms;
+
+  /* --- Avatars (emoji only — never raster) -------------------------------- */
+  --avatar-size-sm: 40px;
+  --avatar-size-md: 56px;
+  --avatar-size-lg: 72px;
+  --avatar-size-xl: 96px;
+  --avatar-bg: var(--accent-soft);
+  --avatar-radius: var(--radius-circle);
+  --avatar-font-size-sm: 1.25rem;
+  --avatar-font-size-md: 1.75rem;
+  --avatar-font-size-lg: 2.25rem;
+  --avatar-font-size-xl: 3rem;
+
+  /* --- Dashboard ---------------------------------------------------------- */
+  --sidebar-width: 232px;
+  --table-row-height: 56px;
+  --table-cell-padding: var(--space-3) var(--space-4);
+  --table-header-ink: var(--muted);
+  --table-header-size: var(--text-xs);
+  --table-border-color: var(--line);
+  --stat-card-bg: var(--surface);
+  --stat-card-border-color: var(--line);
+  --stat-card-radius: var(--radius-lg);
+  --stat-card-padding: var(--space-4);
+
+  /* --- Embed card --------------------------------------------------------- */
+  --embed-min-width: 300px;
+  --embed-max-width: 380px;
+  --embed-padding: var(--space-4);
+  --embed-radius: var(--radius-xl);
+  --embed-bg: var(--surface);
+  --embed-border-color: var(--line);
+  --embed-qr-size: 176px;
+
+  /* --- A4 poster / print -------------------------------------------------- */
+  --poster-width: 210mm;
+  --poster-height: 297mm;
+  --poster-margin: 15mm;
+  --poster-bg: #ffffff;
+  --poster-ink: #0a0a0a;
+  --poster-rule-color: #0a0a0a;
+  --poster-qr-size: 62mm;
+  --poster-name-size: 28pt;
+  --poster-tagline-size: 13pt;
+  --poster-body-size: 11pt;
+  --poster-url-size: 12pt;
+  --poster-honesty-size: 9pt;
+  --poster-gap: 6mm;
+
+  /* --- Demo mode ---------------------------------------------------------- */
+  --demo-banner-bg: var(--warn-soft);
+  --demo-banner-ink: var(--warn);
+  --demo-banner-height: 36px;
+
+  /* --- Skip link ---------------------------------------------------------- */
+  --skip-link-bg: var(--ink);
+  --skip-link-ink: var(--bg);
+  --skip-link-radius: var(--radius-sm);
+  --skip-link-padding: var(--space-2) var(--space-4);
+}
+
+/* ==========================================================================
+   LANGUAGE-AWARE LEADING
+   Set <html lang="bn"> by default; the English toggle switches to lang="en".
+   Bangla gets more line-height than Latin for matras and stacked conjuncts.
+   ========================================================================== */
+:root:lang(bn) {
+  --leading-heading: var(--leading-heading-bn);
+  --leading-body: var(--leading-body-bn);
+  --leading-ui: var(--leading-ui-bn);
+  --leading-badge: var(--leading-badge-bn);
+}
+
+:root:lang(en) {
+  --leading-heading: var(--leading-heading-en);
+  --leading-body: var(--leading-body-en);
+  --leading-ui: var(--leading-ui-en);
+  --leading-badge: var(--leading-badge-en);
+}
+
+/* ==========================================================================
+   DARK THEME
+   Two selectors, identical values: explicit choice wins, otherwise the OS
+   preference applies unless the user pinned light.
+   ========================================================================== */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: var(--bg-dark);
+  --surface: var(--surface-dark);
+  --raised: var(--raised-dark);
+  --ink: var(--ink-dark);
+  --muted: var(--muted-dark);
+  --line: var(--line-dark);
+  --line-strong: var(--line-strong-dark);
+
+  --accent: var(--accent-dark);
+  --accent-hover: var(--accent-hover-dark);
+  --accent-active: var(--accent-active-dark);
+  --accent-soft: var(--accent-soft-dark);
+  --accent-ink: var(--accent-ink-dark);
+  --on-accent: var(--on-accent-dark);
+
+  --success: var(--success-dark);
+  --success-soft: var(--success-soft-dark);
+  --warn: var(--warn-dark);
+  --warn-soft: var(--warn-soft-dark);
+  --danger: var(--danger-dark);
+  --danger-strong: var(--danger-strong-dark);
+  --danger-hover: var(--danger-hover-dark);
+  --danger-soft: var(--danger-soft-dark);
+
+  --focus: var(--focus-dark);
+
+  --overlay: var(--overlay-dark);
+  --selection-bg: var(--selection-bg-dark);
+  --selection-ink: var(--selection-ink-dark);
+  --shadow-color: var(--shadow-color-dark);
+
+  --badge-neutral-ink: var(--muted);
+  --button-danger-ink: #ffffff;
+  --qr-plate-bg: #ffffff;
+  --qr-fg: #0b0b0b;
+  --qr-bg: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg: var(--bg-dark);
+    --surface: var(--surface-dark);
+    --raised: var(--raised-dark);
+    --ink: var(--ink-dark);
+    --muted: var(--muted-dark);
+    --line: var(--line-dark);
+    --line-strong: var(--line-strong-dark);
+
+    --accent: var(--accent-dark);
+    --accent-hover: var(--accent-hover-dark);
+    --accent-active: var(--accent-active-dark);
+    --accent-soft: var(--accent-soft-dark);
+    --accent-ink: var(--accent-ink-dark);
+    --on-accent: var(--on-accent-dark);
+
+    --success: var(--success-dark);
+    --success-soft: var(--success-soft-dark);
+    --warn: var(--warn-dark);
+    --warn-soft: var(--warn-soft-dark);
+    --danger: var(--danger-dark);
+    --danger-strong: var(--danger-strong-dark);
+    --danger-hover: var(--danger-hover-dark);
+    --danger-soft: var(--danger-soft-dark);
+
+    --focus: var(--focus-dark);
+
+    --overlay: var(--overlay-dark);
+    --selection-bg: var(--selection-bg-dark);
+    --selection-ink: var(--selection-ink-dark);
+    --shadow-color: var(--shadow-color-dark);
+
+    --badge-neutral-ink: var(--muted);
+    --button-danger-ink: #ffffff;
+    --qr-plate-bg: #ffffff;
+    --qr-fg: #0b0b0b;
+    --qr-bg: #ffffff;
+  }
+}
+
+/* ==========================================================================
+   GLOBAL TOKEN DEFAULTS
+   ========================================================================== */
+:root {
+  --body-bg: var(--bg);
+  --body-ink: var(--ink);
+  --body-font: var(--font-sans);
+  --body-size: var(--text-base);
+  --body-leading: var(--leading-body);
+}
+
+/* ==========================================================================
+   MOTION PREFERENCES
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0.01ms;
+    --duration-fast: 0.01ms;
+    --duration-base: 0.01ms;
+    --duration-slow: 0.01ms;
+    --motion-distance: 0;
+    --skeleton-duration: 0ms;
+  }
+}
+
+/* ==========================================================================
+   FORCED COLOURS (Windows high contrast)
+   ========================================================================== */
+@media (forced-colors: active) {
+  :root {
+    --focus: Highlight;
+    --focus-ring: var(--focus-width) solid Highlight;
+  }
+}

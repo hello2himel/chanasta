@@ -1,0 +1,5 @@
+packages: []
+minimumReleaseAgeExclude:
+  - '@electric-sql/pglite@0.5.14'
+onlyBuiltDependencies:
+  - esbuild

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify the vendored deshiQR engine is present and pinned
+        run: node -e "const m=require('./vendor/deshiqr/VENDOR.json'); if(!m.commit) process.exit(1); console.log('deshiQR', m.version, m.commit.slice(0,10))"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chanasta-web
+          path: dist
+          retention-days: 7

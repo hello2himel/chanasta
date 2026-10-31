@@ -1,0 +1,12 @@
+# Netlify build for Chanasta (static app; Supabase is optional, see docs/self-hosting.md).
+# Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the Netlify UI to enable real
+# accounts and hosted creator pages. Without them the app runs in local demo mode.
+[build]
+  command = "pnpm install --frozen-lockfile && pnpm build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+# SPA fallbacks, security/cache headers and the embed-friendly CSP live in
+# public/_redirects and public/_headers so they ship with the build.
