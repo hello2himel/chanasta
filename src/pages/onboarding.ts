@@ -1,53 +1,37 @@
 /**
- * `/onboarding` — the 4-step wizard: link → payment details → profile → publish
- * & share. Each step persists a draft; publishing needs ≥1 enabled payment
- * method. Local demo mode works with no backend (the page stays in this browser).
+ * `/onboarding` — four quiet steps: link → payment methods → identity → preview
+ * & publish. The live preview is the chai receipt. Each step persists a draft;
+ * publishing needs at least one enabled payment method.
+ *
+ * Local demo mode works with no backend (everything stays in this browser).
+ * All data calls / error mapping / rate-limit behaviour are the existing ones.
  */
-import { h, openDialog, toast, focusElement } from "../lib/dom.ts";
-import { formatDate } from "../lib/format.ts";
+import { h, toast } from "../lib/dom.ts";
 import { messageForError } from "../lib/messages.ts";
-import { classifyPayload } from "../lib/qr-payload.ts";
-import { generatePosterSvg } from "../lib/poster.ts";
-import { buildShareKit, creatorPageUrl } from "../lib/share.ts";
-import {
-  checkSlugLocally,
-  isSlugRuleValid,
-  slugProblem,
-  validatePaymentMethod,
-  validateProfileText,
-} from "../lib/validate.ts";
+import { isValidHttpsUrl, isSlugRuleValid, slugProblem, validateProfileText } from "../lib/validate.ts";
 import type { AppContext } from "../lib/app.ts";
 import { cx } from "../lib/app.ts";
-import type {
-  Creator,
-  Lang,
-  PaymentKind,
-  PaymentMethod,
-  PaymentQrStatus,
-  QrDecodedSnapshot,
-  SocialKey,
-} from "../lib/types.ts";
-import { icon, steamMark } from "../components/icons.ts";
+import type { Creator, Lang, PaymentMethod, SocialKey } from "../lib/types.ts";
+import { AVATAR_ICONS, avatarIconClass } from "../lib/avatars.ts";
 import {
-  avatar,
-  badge,
-  button,
-  linkButton,
-  selectField,
-  textField,
-} from "../components/ui.ts";
-import { renderPreviewCard } from "../components/preview-card.ts";
-import { renderShareKit } from "../components/share-kit.ts";
-import { demoBanner } from "../components/layout.ts";
+  appAvatar,
+  appBanner,
+  appButton,
+  appEmpty,
+  appField,
+  appLink,
+  appPageHead,
+  appProgressRail,
+  appRadioGroup,
+  appStamp,
+} from "../components/app/ui.ts";
+import { renderMethodEditor } from "../components/app/method-editor.ts";
+import { renderReceiptPreview } from "../components/app/receipt.ts";
+import { renderAppShareKit } from "../components/app/share.ts";
+import { appCopyFor, fill } from "./copy.app.ts";
 
-type Step = 1 | 2 | 3 | 4;
-
-const STEP_KEYS: Record<Step, string> = {
-  1: "onboarding.steps.link",
-  2: "onboarding.steps.payment",
-  3: "onboarding.steps.profile",
-  4: "onboarding.steps.publish",
-};
+const STEP_KEYS = ["stepAccount", "stepPayment", "stepProfile", "stepPublish"] as const;
+const MAX_METHODS = 8;
 
 const SOCIAL_PLATFORMS: { value: SocialKey; label: string }[] = [
   { value: "youtube", label: "YouTube" },
@@ -61,915 +45,705 @@ const SOCIAL_PLATFORMS: { value: SocialKey; label: string }[] = [
   { value: "website", label: "Website" },
 ];
 
-const EMOJIS = ["☕", "🍵", "🫖", "📚", "✍️", "🎨", "🎧", "🎬", "🧑‍🏫", "🌿", "🪷", "🐈", "🎸", "📷", "🧑‍💻", "🎙️", "🍰", "🥟", "🌙", "⭐", "🌻", "🦋", "🎓", "💡"];
+type HandleStatus = "idle" | "checking" | "available" | "taken" | "reserved" | "invalid";
 
-interface WizardState {
-  step: Step;
-  creator: Creator | null;
-  methods: PaymentMethod[];
-  slug: string;
-  slugStatus: "idle" | "checking" | "available" | "taken" | "reserved" | "invalid";
-  display_name: string;
-  tagline: string;
-  bio: string;
-  avatar_emoji: string;
-  socials: Array<{ platform: SocialKey; url: string }>;
-}
-
-function stepIndicator(ctx: AppContext, current: Step): HTMLElement {
-  const list = h("ol", { class: "steps-indicator", attrs: { "aria-label": ctx.t("onboarding.title") } });
-  for (const step of [1, 2, 3, 4] as Step[]) {
-    list.append(
-      h(
-        "li",
-        {
-          class: cx("steps-indicator__item", step === current && "steps-indicator__item--current", step < current && "steps-indicator__item--done"),
-          attrs: { "aria-current": step === current ? "step" : null },
-        },
-        h("span", { class: "steps-indicator__number", text: String(step), attrs: { "aria-hidden": "true" } }),
-        h("span", { class: "steps-indicator__label", text: ctx.t(STEP_KEYS[step]) }),
-      ),
-    );
-  }
-  return list;
-}
-
-function authRequired(ctx: AppContext): HTMLElement {
+function authCard(ctx: AppContext, copy: ReturnType<typeof appCopyFor>): HTMLElement {
   return h(
     "div",
-    { class: "auth-card" },
-    h("span", { class: "auth-card__mark", html: "☕", attrs: { "aria-hidden": "true" } }),
-    h("h1", { class: "auth-card__title", text: ctx.t("onboarding.authRequired") }),
-    linkButton({
-      href: `${ctx.href("/login")}?next=${encodeURIComponent("/onboarding")}`,
-      label: ctx.t("login.title"),
-      variant: "primary",
-      block: true,
-    }),
-    linkButton({ href: ctx.href("/"), label: ctx.t("login.back"), variant: "ghost", size: "sm", icon: "arrowLeft" }),
+    { class: "app-onboarding app-onboarding--auth" },
+    h(
+      "div",
+      { class: "app-auth-card" },
+      h(
+        "div",
+        { class: "app-auth-card__mark" },
+        h("i", { class: "ri-cup-line ri", attrs: { "aria-hidden": "true" } }),
+      ),
+      h("h1", { class: "app-auth-card__title", text: copy.needLogin }),
+      appLink({ label: copy.loginTitle, href: `${ctx.href("/login")}?next=${encodeURIComponent("/onboarding")}`, variant: "primary", block: true }),
+      appLink({ label: copy.backHome, href: ctx.href("/"), variant: "ghost", size: "sm", icon: "arrow-left-line" }),
+    ),
   );
 }
 
 export async function renderOnboarding(ctx: AppContext): Promise<HTMLElement> {
+  const copy = appCopyFor(ctx.lang);
   ctx.setMeta(ctx.t("meta.title.onboarding"));
+
   const session = await ctx.data.getSession().catch(() => null);
-  if (ctx.config.mode === "supabase" && !session) return authRequired(ctx);
+  if (ctx.config.mode === "supabase" && !session) return authCard(ctx, copy);
 
-  const creator = await ctx.data.getMyCreator().catch(() => null);
-  const methods = creator ? await ctx.data.listMyPaymentMethods(creator.id).catch(() => []) : [];
+  const initialCreator = await ctx.data.getMyCreator().catch(() => null);
+  let creator: Creator | null = initialCreator;
+  let methods: PaymentMethod[] = creator ? await ctx.data.listMyPaymentMethods(creator.id).catch(() => []) : [];
 
-  const state: WizardState = {
-    step: creator ? 2 : 1,
-    creator,
-    methods,
-    slug: creator?.slug ?? "",
-    slugStatus: creator ? "available" : "idle",
-    display_name: creator?.display_name ?? "",
-    tagline: creator?.tagline ?? "",
-    bio: creator?.bio ?? "",
-    avatar_emoji: creator?.avatar_emoji ?? "☕",
-    socials: Object.entries(creator?.socials ?? {}).map(([platform, url]) => ({
-      platform: platform as SocialKey,
-      url: String(url),
-    })),
-  };
+  // ---- state --------------------------------------------------------------
+  let step: 1 | 2 | 3 | 4 = creator ? 2 : 1;
+  let handle = creator?.slug ?? "";
+  let handleStatus: HandleStatus = creator ? "available" : "idle";
+  let displayName = creator?.display_name ?? "";
+  let tagline = creator?.tagline ?? "";
+  let bio = creator?.bio ?? "";
+  let avatar = avatarIconClass(creator?.avatar_emoji ?? "");
+  let defaultLocale: Lang = creator?.default_locale ?? "bn";
+  let socials: Array<{ platform: SocialKey; url: string }> = Object.entries(creator?.socials ?? {}).map(
+    ([platform, url]) => ({ platform: platform as SocialKey, url: String(url) }),
+  );
+  let published = creator?.status === "published";
+  let busy = false;
 
-  const page = h("div", { class: "onboarding" });
-  const bannerSlot = h("div", { class: "banner-slot" });
+  const page = h("div", { class: "app-onboarding" });
+  const bannerSlot = h("div", { class: "app-banner-slot" });
+  const previewSlot = h("div", { class: "app-onboarding__preview" });
+  const stepHost = h("div", { class: "app-onboarding__step" });
+  const navHost = h("div", { class: "app-onboarding__nav" });
+  const railSlot = h("div", { class: "app-onboarding__rail" });
 
-  const previewCreator = (): Creator => ({
-    id: state.creator?.id ?? "preview",
-    slug: state.slug || "your-page",
-    display_name: state.display_name.trim() || (state.slug ? state.slug.replace(/-/g, " ") : ctx.t("onboarding.title")),
-    tagline: state.tagline.trim() || null,
-    bio: state.bio.trim() || null,
-    avatar_emoji: state.avatar_emoji,
-    socials: Object.fromEntries(state.socials.filter((row) => row.url).map((row) => [row.platform, row.url])),
-    goal_amount_bdt: null,
-    goal_note: null,
-    default_locale: "bn",
-    status: state.creator?.status ?? "draft",
-    verified: false,
-    published_at: state.creator?.published_at ?? null,
-    updated_at: new Date().toISOString(),
-    created_at: state.creator?.created_at ?? new Date().toISOString(),
-    is_demo: false,
-  });
+  const enabledMethods = (): PaymentMethod[] => methods.filter((method) => method.enabled);
 
-  const render = () => {
-    page.className = cx("onboarding", state.step === 4 && "onboarding--step4");
-    page.replaceChildren();
-    bannerSlot.replaceChildren();
-
-    const content = h("div", { class: "onboarding__inner" });
-    content.append(
-      h(
-        "header",
-        { class: "onboarding__header" },
-        h("div", { class: "onboarding__intro" },
-          h("span", { class: "onboarding__mark", html: steamMark(28), attrs: { "aria-hidden": "true" } }),
-          h("h1", { class: "onboarding__title", text: ctx.t("onboarding.title") }),
-          h("p", { class: "onboarding__subtitle", text: ctx.t("onboarding.intro") }),
-        ),
-        ctx.isDemoMode ? demoBanner(ctx, "demo.localBanner") : null,
-        stepIndicator(ctx, state.step),
-        bannerSlot,
-      ),
-    );
-
-    const layout = h("div", { class: "onboarding__layout" });
-    const formColumn = h("div", { class: "onboarding__form" });
-    const previewColumn = h("aside", { class: "onboarding__preview", attrs: { "aria-label": ctx.t("onboarding.preview") } });
-    previewColumn.append(
-      h("p", { class: "onboarding__preview-label", text: ctx.t("onboarding.preview") }),
-      renderPreviewCard(ctx, {
-        creator: previewCreator(),
-        methods: state.methods,
-        variant: "preview",
-        pageHref: null,
-        amount: 20,
+  // ---- preview ------------------------------------------------------------
+  const updatePreview = () => {
+    previewSlot.replaceChildren(
+      h("p", { class: "app-eyebrow", text: copy.previewL }),
+      renderReceiptPreview(ctx, {
+        creatorName: displayName || handle.replace(/-/g, " "),
+        tagline,
+        avatar,
+        slug: handle,
+        methods,
+        copy,
+        demo: ctx.isDemoMode,
+        compact: true,
       }),
     );
-    layout.append(formColumn, previewColumn);
-    content.append(layout);
-    page.append(content);
+  };
 
-    const stepTitle = h("h2", { class: "section-heading", text: ctx.t(STEP_KEYS[state.step]) });
-    formColumn.append(stepTitle);
+  // ---- rail + nav ---------------------------------------------------------
+  const updateRail = () => {
+    railSlot.replaceChildren(
+      appProgressRail({
+        steps: [1, 2, 3, 4].map((index) => ({
+          label: copy[STEP_KEYS[index - 1] ?? "stepAccount"],
+          index,
+          state: index < step ? "done" : index === step ? "current" : "todo",
+        })),
+        currentLabel: fill(copy.stepOf, { current: step, total: 4 }) + ` · ${copy[STEP_KEYS[step - 1] ?? "stepAccount"]}`,
+      }),
+    );
+  };
 
-    if (state.step === 1) formColumn.append(renderStepSlug(ctx, state, render, () => void nextFromSlug()));
-    else if (state.step === 2) formColumn.append(renderStepPayments(ctx, state, render));
-    else if (state.step === 3) formColumn.append(renderStepProfile(ctx, state, render));
-    else formColumn.append(renderStepPublish(ctx, state, render));
-
-    const nav = h("div", { class: "onboarding__nav" });
-    if (state.step > 1 && state.creator) {
-      nav.append(
-        button({
-          label: ctx.t("onboarding.back"),
+  const updateNav = () => {
+    navHost.replaceChildren();
+    if (step > 1) {
+      navHost.append(
+        appButton({
+          label: copy.back,
           variant: "secondary",
-          icon: "arrowLeft",
+          icon: "arrow-left-line",
           onClick: () => {
-            state.step = (state.step - 1) as Step;
-            render();
+            if (step > 1) {
+              step = (step - 1) as 1 | 2 | 3 | 4;
+              renderStep({ focus: true });
+            }
           },
         }),
       );
     }
-    if (state.step < 4) {
-      nav.append(
-        button({
-          label: ctx.t("onboarding.next"),
+    if (step < 4) {
+      navHost.append(
+        appButton({
+          label: copy.next,
           variant: "primary",
-          iconTrailing: "arrowRight",
-          disabled: state.step === 1 && state.slugStatus !== "available",
-          onClick: () => void nextStep(),
-        }),
-        button({
-          label: ctx.t("onboarding.continueLater"),
-          variant: "ghost",
-          size: "sm",
-          onClick: () => void continueLater(),
-        }),
-      );
-    } else {
-      nav.append(
-        button({
-          label: ctx.t("onboarding.continueLater"),
-          variant: "ghost",
-          size: "sm",
-          onClick: () => void continueLater(),
+          iconTrailing: "arrow-right-line",
+          disabled: step === 1 && handleStatus !== "available",
+          loading: busy,
+          onClick: () => void next(),
         }),
       );
     }
-    formColumn.append(nav);
+    navHost.append(
+      appButton({
+        label: copy.continueLater,
+        variant: "ghost",
+        size: "sm",
+        onClick: () => void continueLater(),
+      }),
+    );
   };
 
-  const nextFromSlug = async () => {
-    const slug = state.slug.trim();
-    if (!isSlugRuleValid(slug)) {
-      state.slugStatus = "invalid";
-      render();
-      return;
-    }
-    const available = await ctx.data.isSlugAvailable(slug).catch(() => false);
-    if (!available && state.creator?.slug !== slug) {
-      state.slugStatus = "taken";
-      render();
-      return;
-    }
-    state.slugStatus = "available";
-    try {
-      if (!state.creator) {
-        const created = await ctx.data.createCreator({
-          slug,
-          display_name: state.display_name.trim() || slug.replace(/-/g, " "),
-          tagline: state.tagline || null,
-          bio: state.bio || null,
-          avatar_emoji: state.avatar_emoji,
-        });
-        state.creator = created;
-        state.display_name = created.display_name;
-      } else if (state.creator.slug !== slug) {
-        const changed = await ctx.data.changeSlug(state.creator.id, slug);
-        state.creator = changed;
-      }
-    } catch (error) {
-      bannerSlot.replaceChildren(
-        h("div", { class: "inline-banner inline-banner--error", attrs: { role: "alert" } }, h("p", { text: messageForError(ctx, error) })),
-      );
-      return;
-    }
-    state.step = 2;
-    render();
+  // ---- helpers ------------------------------------------------------------
+  const checkHandle = (value: string): { status: HandleStatus; message: string } => {
+    if (!value) return { status: "idle", message: copy.handleInvalid };
+    if (creator?.slug === value) return { status: "available", message: copy.handleAvailable };
+    const problem = slugProblem(value);
+    if (problem === "reserved") return { status: "reserved", message: copy.handleReserved };
+    if (problem !== null) return { status: "invalid", message: copy.handleInvalid };
+    return { status: "idle", message: "" };
   };
 
-  const saveProfile = async () => {
-    if (!state.creator) return;
-    const validation = validateProfileText({ display_name: state.display_name, tagline: state.tagline, bio: state.bio });
+  const applyHandle = (value: string): void => {
+    handle = value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30);
+    const checked = checkHandle(handle);
+    handleStatus = checked.status;
+    updateNav();
+    updatePreview();
+  };
+
+  const showError = (message: string): void => {
+    bannerSlot.replaceChildren(appBanner({ tone: "error", body: message }));
+    bannerSlot.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
+
+  const persistProfile = async (): Promise<boolean> => {
+    if (!creator) return false;
+    const validation = validateProfileText({ display_name: displayName, tagline, bio });
     if (!validation.ok) {
-      bannerSlot.replaceChildren(
-        h(
-          "div",
-          { class: "inline-banner inline-banner--error", attrs: { role: "alert" } },
-          h("p", {
-            text:
-              validation.errors.display_name === "REQUIRED"
-                ? ctx.t("claim.form.amountError.required")
-                : validation.errors.tagline === "BANNED" || validation.errors.bio === "BANNED"
-                  ? ctx.t("claim.form.error.banned")
-                  : ctx.t("claim.form.error.tooLong"),
-          }),
-        ),
-      );
+      showError(validation.errors.display_name ? copy.required : ctx.t("claim.form.error.banned"));
       return false;
     }
-    const socials: Record<string, string> = {};
-    for (const row of state.socials) {
+    const socialMap: Record<string, string> = {};
+    for (const row of socials) {
       if (!row.url.trim()) continue;
-      if (!row.url.trim().startsWith("https://")) {
-        bannerSlot.replaceChildren(
-          h("div", { class: "inline-banner inline-banner--error", attrs: { role: "alert" } }, h("p", { text: ctx.t("claim.form.error.invalid") })),
-        );
+      if (!isValidHttpsUrl(row.url.trim())) {
+        showError(copy.handleInvalid);
         return false;
       }
-      socials[row.platform] = row.url.trim();
+      socialMap[row.platform] = row.url.trim();
     }
     try {
-      state.creator = await ctx.data.updateCreator(state.creator.id, {
-        display_name: state.display_name.trim(),
-        tagline: state.tagline.trim() || null,
-        bio: state.bio.trim() || null,
-        avatar_emoji: state.avatar_emoji,
-        socials,
+      creator = await ctx.data.updateCreator(creator.id, {
+        display_name: displayName.trim(),
+        tagline: tagline.trim() || null,
+        bio: bio.trim() || null,
+        avatar_emoji: avatar,
+        socials: socialMap,
+        default_locale: defaultLocale,
       });
       return true;
     } catch (error) {
-      bannerSlot.replaceChildren(
-        h("div", { class: "inline-banner inline-banner--error", attrs: { role: "alert" } }, h("p", { text: messageForError(ctx, error) })),
-      );
+      showError(messageForError(ctx, error));
       return false;
     }
   };
 
-  const nextStep = async () => {
+  const next = async (): Promise<void> => {
     bannerSlot.replaceChildren();
-    if (state.step === 1) return nextFromSlug();
-    if (state.step === 2) {
-      state.step = 3;
-      render();
-      return;
-    }
-    if (state.step === 3) {
-      const saved = await saveProfile();
-      if (!saved) return;
-      toast(ctx.t("onboarding.draftSaved"));
-      state.step = 4;
-      render();
+    if (busy) return;
+    busy = true;
+    updateNav();
+    try {
+      if (step === 1) {
+        const value = handle.trim();
+        if (!isSlugRuleValid(value)) {
+          handleStatus = "invalid";
+          updateNav();
+          return;
+        }
+        if (!creator) {
+          creator = await ctx.data.createCreator({
+            slug: value,
+            display_name: displayName.trim() || value.replace(/-/g, " "),
+            avatar_emoji: avatar,
+          });
+          displayName = creator.display_name;
+          step = 2;
+        } else if (creator.slug !== value) {
+          creator = await ctx.data.changeSlug(creator.id, value);
+          step = 2;
+        } else {
+          step = 2;
+        }
+      } else if (step === 2) {
+        step = 3;
+      } else if (step === 3) {
+        if (!(await persistProfile())) return;
+        step = 4;
+      }
+      renderStep({ focus: true });
+    } catch (error) {
+      showError(messageForError(ctx, error));
+    } finally {
+      busy = false;
+      updateNav();
     }
   };
 
-  const continueLater = async () => {
-    if (state.creator && state.step >= 3) await saveProfile();
+  const continueLater = async (): Promise<void> => {
+    if (step >= 3 && creator) await persistProfile();
     ctx.navigate("/dashboard");
   };
 
-  render();
-  return page;
-}
-
-// ---- step 1: slug ---------------------------------------------------------
-
-function renderStepSlug(ctx: AppContext, state: WizardState, rerender: () => void, onNext: () => void): HTMLElement {
-  const statusText: Record<WizardState["slugStatus"], string> = {
-    idle: ctx.t("onboarding.slug.helper"),
-    checking: ctx.t("onboarding.slug.checking"),
-    available: ctx.t("onboarding.slug.available"),
-    taken: ctx.t("onboarding.slug.taken"),
-    reserved: ctx.t("onboarding.slug.reserved"),
-    invalid: ctx.t("onboarding.slug.invalid"),
-  };
-
-  const input = h("input", {
-    class: "field__control slug-input__control",
-    id: "onboarding-slug",
-    attrs: {
-      type: "text",
-      autocomplete: "off",
-      autocapitalize: "none",
-      autocorrect: "off",
-      spellcheck: "false",
-      maxlength: 30,
-      value: state.slug,
-      "aria-describedby": "onboarding-slug-helper",
-    },
-  });
-  const status = h("p", {
-    class: cx("slug-status", `slug-status--${state.slugStatus}`),
-    id: "onboarding-slug-helper",
-    attrs: { "aria-live": "polite" },
-    text: statusText[state.slugStatus],
-  });
-
-  let timer = 0;
-  input.addEventListener("input", () => {
-    state.slug = input.value.trim().toLowerCase();
-    input.value = state.slug;
-    window.clearTimeout(timer);
-    const problem = slugProblem(state.slug);
-    if (problem === "reserved") {
-      state.slugStatus = "reserved";
-    } else if (problem !== null) {
-      state.slugStatus = state.slug.length === 0 ? "idle" : "invalid";
-    } else if (state.creator?.slug === state.slug) {
-      state.slugStatus = "available";
-    } else {
-      state.slugStatus = "checking";
+  // ---- step 1 -------------------------------------------------------------
+  const renderStepAccount = (): HTMLElement => {
+    const input = h("input", {
+      class: "app-input app-input--mono",
+      id: "onboarding-handle",
+      attrs: {
+        type: "text",
+        autocomplete: "off",
+        autocapitalize: "none",
+        autocorrect: "off",
+        spellcheck: "false",
+        maxlength: 30,
+        value: handle,
+        "aria-describedby": "onboarding-handle-status",
+      },
+    });
+    const status = h("p", {
+      class: cx("app-field__helper", handleStatus === "available" && "app-status--ok", (handleStatus === "taken" || handleStatus === "reserved" || handleStatus === "invalid") && "app-status--bad"),
+      id: "onboarding-handle-status",
+      attrs: { role: "status", "aria-live": "polite" },
+    });
+    const showStatus = () => {
+      const messages: Record<HandleStatus, string> = {
+        idle: copy.handleInvalid,
+        checking: copy.handleChecking,
+        available: copy.handleAvailable,
+        taken: copy.handleTaken,
+        reserved: copy.handleReserved,
+        invalid: copy.handleInvalid,
+      };
+      status.textContent = handle ? messages[handleStatus] : "";
+      status.className = cx(
+        "app-field__helper",
+        handleStatus === "available" && "app-status--ok",
+        (handleStatus === "taken" || handleStatus === "reserved" || handleStatus === "invalid") && "app-status--bad",
+      );
+    };
+    showStatus();
+    let timer = 0;
+    input.addEventListener("input", () => {
+      window.clearTimeout(timer);
+      applyHandle(input.value);
+      input.value = handle;
+      const local = checkHandle(handle);
+      if (local.status === "available" || local.status === "reserved" || local.status === "invalid") {
+        showStatus();
+        return;
+      }
+      if (!handle) {
+        handleStatus = "idle";
+        showStatus();
+        return;
+      }
+      handleStatus = "checking";
+      showStatus();
       timer = window.setTimeout(() => {
-        void ctx.data.isSlugAvailable(state.slug).then((available) => {
-          state.slugStatus = available ? "available" : "taken";
-          rerender();
+        void ctx.data.isSlugAvailable(handle).then((available) => {
+          handleStatus = available ? "available" : "taken";
+          showStatus();
+          updateNav();
         });
       }, 400);
-    }
-    status.textContent = statusText[state.slugStatus];
-    status.className = cx("slug-status", `slug-status--${state.slugStatus}`);
-  });
-  input.addEventListener("keydown", (event) => {
-    if ((event as KeyboardEvent).key === "Enter") {
-      event.preventDefault();
-      onNext();
-    }
-  });
+    });
+    input.addEventListener("keydown", (event) => {
+      if ((event as KeyboardEvent).key === "Enter") {
+        event.preventDefault();
+        void next();
+      }
+    });
 
-  return h(
-    "div",
-    { class: "onboarding-step" },
-    h(
-      "div",
-      { class: "field" },
-      h("label", { class: "field__label", attrs: { for: "onboarding-slug" }, text: ctx.t("onboarding.slug.label") }),
+    const accountLine = ctx.isDemoMode
+      ? appBanner({ tone: "info", body: copy.accountLocal, role: "note" })
+      : h("p", { class: "app-field__helper", text: `${copy.accountSignedIn}: ${session?.email ?? ""}` });
+
+    return h(
+      "section",
+      { class: "app-section", attrs: { "aria-labelledby": "onboarding-handle-title" } },
+      h("h2", { class: "app-section-head__title", id: "onboarding-handle-title", text: copy.handleChooseTitle }),
+      h("p", { class: "app-field__helper", text: copy.handleChooseSub }),
+      accountLine,
       h(
         "div",
-        { class: "slug-input" },
-        h("span", { class: "slug-input__prefix", text: "@", attrs: { "aria-hidden": "true" } }),
-        input,
+        { class: "app-field" },
+        h("label", { class: "app-field__label", attrs: { for: "onboarding-handle" } }, h("span", { text: copy.handleL })),
+        h("div", { class: "app-slug-input" }, h("span", { class: "app-slug-input__prefix", text: "@" }), input),
+        h("p", { class: "app-field__helper", text: copy.handleRule }),
+        status,
       ),
-      h("p", { class: "field__helper", text: ctx.t("onboarding.slug.helper") }),
-      status,
-    ),
-    h("p", { class: "field__helper", text: ctx.t("honesty.creatorNote") }),
-  );
-}
+      h(
+        "div",
+        { class: "app-handle-preview" },
+        h("span", { class: "app-field__helper", text: copy.yourLink }),
+        h("span", { class: "app-mono", text: `chanasta/@${handle || "your-name"}`, attrs: { dir: "ltr" } }),
+      ),
+    );
+  };
 
-// ---- step 2: payment methods ---------------------------------------------
+  // ---- step 2 -------------------------------------------------------------
+  const renderStepPayments = (): HTMLElement => {
+    const section = h("section", { class: "app-section", attrs: { "aria-labelledby": "onboarding-payment-title" } });
+    section.append(
+      h("h2", { class: "app-section-head__title", id: "onboarding-payment-title", text: copy.paymentTitle }),
+      h("p", { class: "app-field__helper", text: copy.paymentSub }),
+      h("p", { class: "app-helper", text: ctx.t("honesty.creatorNote") }),
+    );
 
-function renderStepPayments(ctx: AppContext, state: WizardState, rerender: () => void): HTMLElement {
-  const wrap = h("div", { class: "onboarding-step" });
-  const list = h("ul", { class: "method-list method-list--compact" });
-  if (state.methods.length === 0) {
-    wrap.append(h("p", { class: "onboarding__empty", text: ctx.t("onboarding.payment.empty") }));
-  } else {
-    for (const method of state.methods) {
-      list.append(
+    if (methods.length > 0) {
+      section.append(
         h(
-          "li",
-          { class: "method-row method-row--compact" },
-          h("div", { class: "method-row__identity" },
-            h("span", { class: "method-row__provider", text: ctx.t(`provider.${method.kind}`) }),
-            h("span", { class: "method-row__label", text: method.label }),
-          ),
-          qrMethodBadge(ctx, method),
-          h("span", { class: "method-row__account", attrs: { dir: "ltr" }, text: method.account_number ?? "" }),
-          button({
-            label: ctx.t("common.remove"),
-            variant: "ghost",
-            size: "sm",
-            icon: "trash",
-            onClick: () => {
-              void ctx.data.deletePaymentMethod(method.id).then(() => {
-                state.methods = state.methods.filter((entry) => entry.id !== method.id);
-                rerender();
-              });
-            },
-          }),
-        ),
-      );
-    }
-    wrap.append(list);
-    wrap.append(h("p", { class: "field__helper", text: ctx.t("onboarding.payment.addedCount", { count: state.methods.length }) }));
-  }
-
-  wrap.append(h("h3", { class: "form-section__title", text: ctx.t("onboarding.payment.addAnother") }));
-
-  let mode: "paste" | "upload" | "manual" = "paste";
-  let qrPayload = "";
-  let qrStatus: PaymentQrStatus = "none";
-  let qrDecoded: QrDecodedSnapshot | null = null;
-
-  const modeButtons = (["paste", "upload", "manual"] as const).map((value) =>
-    h(
-      "button",
-      {
-        class: cx("segment", mode === value && "segment--active"),
-        attrs: { type: "button", "aria-pressed": String(mode === value) },
-        text: ctx.t(`onboarding.payment.${value === "paste" ? "qrTab" : value === "upload" ? "uploadTab" : "manualTab"}`),
-      },
-    ),
-  );
-  const segments = h("div", { class: "segments" }, ...modeButtons);
-
-  const kindField = selectField(ctx.lang, {
-    id: "onboarding-kind",
-    label: ctx.t("onboarding.payment.kind"),
-    choices: [
-      { value: "bkash", label: ctx.t("provider.bkash") },
-      { value: "nagad", label: ctx.t("provider.nagad") },
-      { value: "rocket", label: ctx.t("provider.rocket") },
-      { value: "bank", label: ctx.t("provider.bank") },
-      { value: "other", label: ctx.t("provider.other") },
-    ],
-    value: "bkash",
-  });
-  const labelField = textField(ctx.lang, {
-    id: "onboarding-label",
-    label: ctx.t("onboarding.payment.label"),
-    placeholder: ctx.t("onboarding.payment.labelPlaceholder"),
-    maxlength: 40,
-    required: true,
-  });
-  const accountField = textField(ctx.lang, {
-    id: "onboarding-account",
-    label: ctx.t("onboarding.payment.account"),
-    inputmode: "numeric",
-    mono: true,
-  });
-  const holderField = textField(ctx.lang, { id: "onboarding-holder", label: ctx.t("onboarding.payment.holder") });
-  const bankField = textField(ctx.lang, { id: "onboarding-bank", label: ctx.t("onboarding.payment.bank") });
-  const branchField = textField(ctx.lang, { id: "onboarding-branch", label: ctx.t("onboarding.payment.branch") });
-  const routingField = textField(ctx.lang, { id: "onboarding-routing", label: ctx.t("onboarding.payment.routing"), inputmode: "numeric" });
-  const bankFields = h("div", { class: "form-grid", attrs: { hidden: true } }, bankField.wrap, branchField.wrap, routingField.wrap);
-
-  kindField.input.addEventListener("change", () => {
-    bankFields.hidden = kindField.input.value !== "bank";
-  });
-
-  const decodeStatus = h("p", { class: "decode-status decode-status--idle", attrs: { "aria-live": "polite" }, text: ctx.t("onboarding.payment.decode.idle") });
-  const merchantLine = h("p", { class: "decode-merchant", attrs: { hidden: true } });
-
-  const applyPayload = (payload: string) => {
-    const classification = classifyPayload(payload);
-    if (!classification.ok) {
-      qrPayload = payload;
-      qrStatus = "none";
-      qrDecoded = null;
-      decodeStatus.className = "decode-status decode-status--error";
-      decodeStatus.textContent = ctx.t("onboarding.payment.decode.failed");
-      merchantLine.hidden = true;
-      return;
-    }
-    qrPayload = payload;
-    qrStatus = classification.status;
-    qrDecoded = classification.decoded;
-    if (classification.merchantName) {
-      merchantLine.hidden = false;
-      merchantLine.textContent = `${classification.merchantName} — ${ctx.t("onboarding.payment.merchant")}`;
-    }
-    decodeStatus.className = `decode-status decode-status--${classification.status === "verified" ? "ok" : "warn"}`;
-    decodeStatus.textContent = ctx.t(
-      classification.status === "verified" ? "onboarding.payment.decode.verified" : "onboarding.payment.decode.unverified",
-    );
-  };
-
-  // paste area
-  const pasteArea = h("div", { class: "form-section" });
-  const qrText = h("textarea", {
-    class: "field__control field__control--area field__control--mono",
-    id: "onboarding-payload",
-    attrs: { rows: 3, placeholder: ctx.t("onboarding.payment.pastePlaceholder"), spellcheck: "false" },
-  });
-  let pasteTimer = 0;
-  qrText.addEventListener("input", () => {
-    window.clearTimeout(pasteTimer);
-    const value = qrText.value.trim();
-    if (!value) {
-      qrPayload = "";
-      qrStatus = "none";
-      qrDecoded = null;
-      decodeStatus.className = "decode-status decode-status--idle";
-      decodeStatus.textContent = ctx.t("onboarding.payment.decode.idle");
-      merchantLine.hidden = true;
-      return;
-    }
-    decodeStatus.className = "decode-status decode-status--idle";
-    decodeStatus.textContent = ctx.t("onboarding.payment.decode.reading");
-    pasteTimer = window.setTimeout(() => applyPayload(value), 250);
-  });
-  pasteArea.append(
-    h("label", { class: "field__label", attrs: { for: "onboarding-payload" }, text: ctx.t("onboarding.payment.pasteLabel") }),
-    qrText,
-  );
-
-  // upload area
-  const uploadArea = h("div", { class: "form-section", attrs: { hidden: true } });
-  const fileInput = h("input", {
-    class: "sr-only",
-    id: "onboarding-qr-file",
-    attrs: { type: "file", accept: "image/png,image/jpeg,image/webp" },
-  });
-  fileInput.addEventListener("change", () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    decodeStatus.className = "decode-status decode-status--idle";
-    decodeStatus.textContent = ctx.t("onboarding.payment.decode.reading");
-    void import("../lib/qr-image.ts")
-      .then((module) => module.decodeQrImageFile(file))
-      .then((result) => {
-        if (!result.ok || !result.payload) {
-          decodeStatus.className = "decode-status decode-status--error";
-          decodeStatus.textContent =
-            result.error === "too_large" ? ctx.t("onboarding.payment.decode.tooLarge") : ctx.t("onboarding.payment.decode.failed");
-          return;
-        }
-        qrText.value = result.payload;
-        applyPayload(result.payload);
-      })
-      .catch(() => {
-        decodeStatus.className = "decode-status decode-status--error";
-        decodeStatus.textContent = ctx.t("onboarding.payment.decode.failed");
-      });
-  });
-  uploadArea.append(
-    h(
-      "label",
-      { class: "upload-drop", attrs: { for: "onboarding-qr-file" } },
-      h("span", { class: "upload-drop__icon", html: icon("image", 32) }),
-      h("span", { class: "upload-drop__title", text: ctx.t("onboarding.payment.uploadLabel") }),
-      h("span", { class: "upload-drop__hint", text: ctx.t("onboarding.payment.uploadHint") }),
-      h("span", { class: "field__helper", text: ctx.t("onboarding.payment.uploadTypes") }),
-    ),
-    fileInput,
-    h("p", { class: "field__helper", text: ctx.t("onboarding.payment.uploadNote") }),
-  );
-
-  const modeAreas = { paste: pasteArea, upload: uploadArea, manual: h("div", { attrs: { hidden: true } }) };
-  const setMode = (next: "paste" | "upload" | "manual") => {
-    mode = next;
-    modeButtons.forEach((buttonElement, index) => {
-      const value = (["paste", "upload", "manual"] as const)[index];
-      buttonElement.classList.toggle("segment--active", value === next);
-      buttonElement.setAttribute("aria-pressed", String(value === next));
-    });
-    pasteArea.hidden = next !== "paste";
-    uploadArea.hidden = next !== "upload";
-    if (next === "manual") {
-      qrPayload = "";
-      qrStatus = "none";
-      qrDecoded = null;
-      decodeStatus.className = "decode-status decode-status--idle";
-      decodeStatus.textContent = ctx.t("onboarding.payment.decode.idle");
-      merchantLine.hidden = true;
-    }
-  };
-  modeButtons.forEach((buttonElement, index) => {
-    const value = (["paste", "upload", "manual"] as const)[index];
-    if (value) buttonElement.addEventListener("click", () => setMode(value));
-  });
-
-  const save = button({
-    label: ctx.t("onboarding.payment.save"),
-    variant: "primary",
-    onClick: () => {
-      if (!state.creator) return;
-      const kind = kindField.input.value as PaymentKind;
-      const account = accountField.input.value.trim();
-      const evidenceOk = mode === "manual" ? account.length > 0 : qrPayload.length > 0 || account.length > 0;
-      if (!evidenceOk) {
-        decodeStatus.className = "decode-status decode-status--error";
-        decodeStatus.textContent = ctx.t("claim.form.error.invalid");
-        return;
-      }
-      if (mode !== "manual" && qrPayload && qrStatus === "none") {
-        decodeStatus.className = "decode-status decode-status--error";
-        decodeStatus.textContent = ctx.t("onboarding.payment.decode.failed");
-        return;
-      }
-      const validation = validatePaymentMethod({
-        kind,
-        label: labelField.input.value,
-        account_number: account || null,
-        account_holder: holderField.input.value,
-        bank_name: bankField.input.value,
-        routing_number: routingField.input.value,
-        qr_payload: qrPayload || null,
-      });
-      if (!validation.ok) {
-        const issue = validation.issues[0];
-        const message = ctx.t("claim.form.error.invalid");
-        if (issue?.field === "label") labelField.setError(message);
-        if (issue?.field === "account") accountField.setError(message);
-        if (issue?.field === "routing") routingField.setError(message);
-        if (issue?.field === "evidence") accountField.setError(message);
-        return;
-      }
-      void ctx.data
-        .savePaymentMethod({
-          creator_id: state.creator.id,
-          kind,
-          label: labelField.input.value.trim(),
-          account_number: account || null,
-          account_holder: holderField.input.value.trim() || null,
-          bank_name: kind === "bank" ? bankField.input.value.trim() : null,
-          branch: kind === "bank" ? branchField.input.value.trim() : null,
-          routing_number: kind === "bank" ? routingField.input.value.trim() : null,
-          qr_payload: qrPayload || null,
-          qr_status: qrPayload ? qrStatus : "none",
-          qr_decoded: qrDecoded,
-          sort_order: state.methods.length,
-          enabled: true,
-        })
-        .then((method) => {
-          state.methods = [...state.methods, method];
-          toast(ctx.t("onboarding.payment.saved"));
-          rerender();
-        })
-        .catch((error: unknown) => {
-          decodeStatus.className = "decode-status decode-status--error";
-          decodeStatus.textContent = messageForError(ctx, error);
-        });
-    },
-  });
-
-  wrap.append(
-    h("div", { class: "method-editor" },
-      segments,
-      modeAreas.paste,
-      modeAreas.upload,
-      decodeStatus,
-      merchantLine,
-      h("div", { class: "form-grid" }, kindField.wrap, labelField.wrap),
-      h("div", { class: "form-grid" }, accountField.wrap, holderField.wrap),
-      bankFields,
-      save,
-    ),
-    h("p", { class: "field__helper", text: ctx.t("honesty.creatorNote") }),
-  );
-  if (mode === "paste") {
-    pasteArea.hidden = false;
-    uploadArea.hidden = true;
-  }
-  return wrap;
-}
-
-function qrMethodBadge(ctx: AppContext, method: PaymentMethod): HTMLElement {
-  if (method.qr_status === "verified") {
-    return badge({ label: ctx.t("creator.qr.status.verified"), variant: "confirmed", icon: "checkCircle" });
-  }
-  if (method.qr_status === "unverified") {
-    return badge({ label: ctx.t("creator.qr.status.unverified"), variant: "selfreported", icon: "info" });
-  }
-  return badge({ label: ctx.t("creator.qr.status.manual"), variant: "neutral", icon: "hash" });
-}
-
-// ---- step 3: profile ------------------------------------------------------
-
-function renderStepProfile(ctx: AppContext, state: WizardState, rerender: () => void): HTMLElement {
-  const wrap = h("div", { class: "onboarding-step" });
-  const emojiPreview = avatar(state.avatar_emoji, "lg");
-  const emojiGrid = h("div", { class: "emoji-grid", attrs: { role: "radiogroup", "aria-label": ctx.t("common.emojiPicker") } });
-  const emojiButtons = EMOJIS.map((emoji) =>
-    h("button", {
-      class: "emoji-grid__item",
-      attrs: { type: "button", role: "radio", "aria-checked": String(emoji === state.avatar_emoji), "aria-label": emoji },
-      text: emoji,
-    }),
-  );
-  emojiButtons.forEach((emojiButton) => {
-    emojiButton.addEventListener("click", () => {
-      state.avatar_emoji = emojiButton.textContent ?? "☕";
-      emojiPreview.textContent = state.avatar_emoji;
-      for (const other of emojiButtons) other.setAttribute("aria-checked", String(other === emojiButton));
-      rerender();
-    });
-  });
-  emojiGrid.append(...emojiButtons);
-
-  const nameField = textField(ctx.lang, {
-    id: "onboarding-name",
-    label: ctx.t("onboarding.profile.displayName"),
-    value: state.display_name,
-    maxlength: 60,
-    required: true,
-  });
-  nameField.input.addEventListener("input", () => {
-    state.display_name = nameField.input.value;
-  });
-  const taglineField = textField(ctx.lang, {
-    id: "onboarding-tagline",
-    label: ctx.t("onboarding.profile.tagline"),
-    value: state.tagline,
-    maxlength: 80,
-  });
-  taglineField.input.addEventListener("input", () => {
-    state.tagline = taglineField.input.value;
-  });
-  const bioField = textField(ctx.lang, {
-    id: "onboarding-bio",
-    label: ctx.t("onboarding.profile.bio"),
-    value: state.bio,
-    rows: 4,
-    maxlength: 600,
-  });
-  bioField.input.addEventListener("input", () => {
-    state.bio = (bioField.input as HTMLTextAreaElement).value;
-  });
-
-  const socialList = h("div", { class: "social-list" });
-  const renderSocials = () => {
-    socialList.replaceChildren();
-    state.socials.forEach((row, index) => {
-      const platform = selectField(ctx.lang, {
-        id: `onboarding-social-${index}`,
-        label: ctx.t("onboarding.profile.socialPlatform"),
-        choices: SOCIAL_PLATFORMS.map((entry) => ({ value: entry.value, label: entry.label })),
-        value: row.platform,
-      });
-      platform.input.addEventListener("change", () => {
-        row.platform = platform.input.value as SocialKey;
-      });
-      const url = textField(ctx.lang, {
-        id: `onboarding-social-url-${index}`,
-        label: ctx.t("onboarding.profile.socialUrl"),
-        value: row.url,
-        type: "url",
-        placeholder: "https://",
-      });
-      url.input.addEventListener("input", () => {
-        row.url = url.input.value;
-      });
-      socialList.append(
-        h("div", { class: "social-row" },
-          platform.wrap,
-          url.wrap,
-          button({
-            label: ctx.t("common.remove"),
-            variant: "ghost",
-            size: "sm",
-            icon: "trash",
-            onClick: () => {
-              state.socials.splice(index, 1);
-              renderSocials();
-            },
-          }),
-        ),
-      );
-    });
-  };
-  renderSocials();
-
-  wrap.append(
-    h("div", { class: "emoji-row" },
-      emojiPreview,
-      h("details", { class: "emoji-picker" },
-        h("summary", { class: "emoji-picker__summary" }, icon("emoji", 18), ctx.t("onboarding.profile.emoji")),
-        emojiGrid,
-      ),
-    ),
-    nameField.wrap,
-    taglineField.wrap,
-    bioField.wrap,
-    h("h3", { class: "form-section__title", text: ctx.t("onboarding.profile.socials") }),
-    socialList,
-    ...(state.socials.length < 6
-      ? [
-          button({
-            label: ctx.t("onboarding.profile.addSocial"),
-            variant: "secondary",
-            size: "sm",
-            icon: "plus",
-            onClick: () => {
-              state.socials.push({ platform: "youtube", url: "" });
-              renderSocials();
-            },
-          }),
-        ]
-      : []),
-  );
-  return wrap;
-}
-
-// ---- step 4: publish & share ---------------------------------------------
-
-function renderStepPublish(ctx: AppContext, state: WizardState, rerender: () => void): HTMLElement {
-  const wrap = h("div", { class: "onboarding-step" });
-  if (!state.creator) return wrap;
-  const creator = state.creator;
-  const published = creator.status === "published";
-  const enabled = state.methods.filter((method) => method.enabled);
-  const pageUrl = creatorPageUrl(creator.slug, ctx.origin, ctx.base);
-
-  if (published) {
-    wrap.append(
-      h("div", { class: "inline-banner inline-banner--ok", attrs: { role: "status" } },
-        h("span", { html: icon("checkCircle", 18) }),
-        h("p", { text: ctx.t("onboarding.publish.published") }),
-      ),
-      renderShareKit(ctx, { slug: creator.slug, creatorName: creator.display_name }),
-      h("div", { class: "onboarding__published-actions" },
-        linkButton({ href: ctx.href(`/@${creator.slug}`), label: ctx.t("onboarding.publish.openPage"), variant: "primary", icon: "external" }),
-        linkButton({ href: ctx.href("/dashboard"), label: ctx.t("onboarding.publish.goDashboard"), variant: "secondary", icon: "arrowRight" }),
-        posterButton(),
-      ),
-    );
-    return wrap;
-  }
-
-  wrap.append(
-    h("p", { class: "onboarding__ready", text: ctx.t("onboarding.publish.ready") }),
-    ...(enabled.length === 0
-      ? [
-          h("div", { class: "inline-banner inline-banner--warn", attrs: { role: "alert" } },
-            h("span", { html: icon("info", 18) }),
-            h("p", { text: ctx.t("onboarding.publish.blocked") }),
-          ),
-        ]
-      : []),
-    h("div", { class: "onboarding__publish-actions" },
-      button({
-        label: ctx.t("onboarding.publish.publish"),
-        variant: "primary",
-        icon: "checkCircle",
-        disabled: enabled.length === 0,
-        onClick: () => {
-          void ctx.data
-            .setCreatorStatus(creator.id, "published")
-            .then((updated) => {
-              state.creator = updated;
-              toast(ctx.t("onboarding.publish.published"));
-              rerender();
-            })
-            .catch((error: unknown) => {
-              wrap.prepend(
-                h("div", { class: "inline-banner inline-banner--error", attrs: { role: "alert" } },
-                  h("p", { text: messageForError(ctx, error) }),
+          "ul",
+          { class: "app-methods" },
+          ...methods.map((method) =>
+            h(
+              "li",
+              { class: "app-method app-method--compact" },
+              h(
+                "div",
+                { class: "app-method__body" },
+                h(
+                  "div",
+                  { class: "app-method__top" },
+                  h("span", { class: "app-method__provider", text: ctx.t(`provider.${method.kind}`) }),
+                  h("span", { class: "app-method__label", text: method.label }),
                 ),
-              );
-            });
+                h(
+                  "div",
+                  { class: "app-method__meta" },
+                  method.qr_status === "verified"
+                    ? appStamp({ label: copy.stampQrVerified, tone: "confirmed", icon: "checkbox-circle-line" })
+                    : method.qr_status === "unverified"
+                      ? appStamp({ label: copy.stampQrUnverified, tone: "self", icon: "information-line" })
+                      : appStamp({ label: copy.stampManual, tone: "outline", icon: "hashtag" }),
+                ),
+                h("p", { class: "app-method__detail", text: method.account_number ?? "", attrs: { dir: "ltr" } }),
+              ),
+              h(
+                "div",
+                { class: "app-method__controls" },
+                appButton({
+                  label: copy.remove,
+                  variant: "ghost",
+                  size: "sm",
+                  icon: "delete-bin-line",
+                  onClick: () => {
+                    void ctx.data.deletePaymentMethod(method.id).then(() => {
+                      methods = methods.filter((entry) => entry.id !== method.id);
+                      renderStep();
+                    });
+                  },
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
+    } else {
+      section.append(appEmpty({ icon: "bank-card-line", title: copy.addedEmpty, body: copy.paymentSub }));
+    }
+
+    if (creator && methods.length < MAX_METHODS) {
+      const editor = renderMethodEditor(ctx, {
+        copy,
+        canCancel: false,
+        onSave: async (input) => {
+          await ctx.data.savePaymentMethod({
+            ...input,
+            creator_id: creator?.id ?? "",
+            sort_order: methods.length,
+            enabled: true,
+          });
+          methods = creator ? await ctx.data.listMyPaymentMethods(creator.id) : methods;
+          toast(copy.methodSaved);
+          renderStep();
+        },
+      });
+      section.append(editor.element);
+    } else if (methods.length >= MAX_METHODS) {
+      section.append(h("p", { class: "app-field__helper", text: copy.maxMethods }));
+    }
+
+    return section;
+  };
+
+  // ---- step 3 -------------------------------------------------------------
+  const renderStepProfile = (): HTMLElement => {
+    const section = h("section", { class: "app-section", attrs: { "aria-labelledby": "onboarding-profile-title" } });
+    section.append(
+      h("h2", { class: "app-section-head__title", id: "onboarding-profile-title", text: copy.profileStepTitle }),
+      h("p", { class: "app-field__helper", text: copy.profileStepSub }),
+    );
+
+    const nameField = appField({
+      id: "onboarding-name",
+      label: copy.nameL,
+      placeholder: copy.namePh,
+      maxlength: 60,
+      value: displayName,
+      onInput: (value) => {
+        displayName = value;
+        updatePreview();
+      },
+    });
+    const taglineField = appField({
+      id: "onboarding-tagline",
+      label: copy.tagL,
+      placeholder: copy.tagPh,
+      maxlength: 80,
+      value: tagline,
+      onInput: (value) => {
+        tagline = value;
+        updatePreview();
+      },
+    });
+    const bioField = appField({
+      id: "onboarding-bio",
+      label: copy.bioL,
+      placeholder: copy.bioPh,
+      multiline: true,
+      rows: 4,
+      maxlength: 600,
+      value: bio,
+      onInput: (value) => {
+        bio = value;
+      },
+    });
+
+    const avatarPreview = appAvatar(avatar, "lg", displayName || copy.avatarL);
+    const grid = h("div", { class: "app-avatar-grid", attrs: { role: "radiogroup", "aria-label": copy.avatarPickerLabel } });
+    const avatarButtons = AVATAR_ICONS.map((iconClass) =>
+      h("button", {
+        class: "app-avatar-pick",
+        attrs: { type: "button", role: "radio", "aria-checked": String(avatar === iconClass), "aria-label": iconClass },
+        html: `<i class="${iconClass} ri" aria-hidden="true"></i>`,
+      }),
+    );
+    avatarButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const iconClass = button.querySelector("i")?.className.split(" ")[0] ?? "ri-cup-line";
+        avatar = iconClass;
+        avatarPreview.innerHTML = `<i class="${iconClass} ri" aria-hidden="true"></i>`;
+        for (const other of avatarButtons) other.setAttribute("aria-checked", String(other === button));
+        updatePreview();
+      });
+    });
+    grid.append(...avatarButtons);
+
+    const socialsHost = h("div", { class: "app-socials" });
+    const renderSocials = () => {
+      socialsHost.replaceChildren();
+      socials.forEach((row, index) => {
+        const platformSelect = h(
+          "select",
+          { class: "app-input app-select", attrs: { "aria-label": copy.platformL } },
+          ...SOCIAL_PLATFORMS.map((platform) => {
+            const option = h("option", { attrs: { value: platform.value }, text: platform.label });
+            if (platform.value === row.platform) option.selected = true;
+            return option;
+          }),
+        );
+        platformSelect.addEventListener("change", () => {
+          row.platform = platformSelect.value as SocialKey;
+        });
+        const urlField = appField({
+          id: `onboarding-social-${index}`,
+          label: copy.linkUrl,
+          type: "url",
+          placeholder: "https://",
+          value: row.url,
+          onInput: (value) => {
+            row.url = value;
+          },
+        });
+        socialsHost.append(
+          h(
+            "div",
+            { class: "app-social-row" },
+            h("div", { class: "app-social-row__platform" }, platformSelect),
+            urlField.wrap,
+            appButton({
+              label: copy.remove,
+              variant: "ghost",
+              size: "sm",
+              icon: "delete-bin-line",
+              onClick: () => {
+                socials.splice(index, 1);
+                renderSocials();
+              },
+            }),
+          ),
+        );
+      });
+    };
+    renderSocials();
+
+    section.append(
+      h(
+        "div",
+        { class: "app-avatar-row" },
+        avatarPreview,
+        h(
+          "details",
+          { class: "app-avatar-picker" },
+          h(
+            "summary",
+            { class: "app-avatar-picker__summary" },
+            h("i", { class: "ri-emotion-line ri", attrs: { "aria-hidden": "true" } }),
+            h("span", { text: copy.avatarPick }),
+          ),
+          grid,
+        ),
+      ),
+      nameField.wrap,
+      taglineField.wrap,
+      bioField.wrap,
+      appRadioGroup({
+        legend: copy.defaultLang,
+        name: "onboarding-locale",
+        choices: [
+          { value: "bn", label: "বাংলা" },
+          { value: "en", label: "English" },
+        ],
+        value: defaultLocale,
+        onChange: (value) => {
+          defaultLocale = value as Lang;
         },
       }),
-      linkButton({ href: pageUrl, label: ctx.t("onboarding.publish.openPage"), variant: "ghost", size: "sm", icon: "external", external: true }),
+      h(
+        "details",
+        { class: "app-details" },
+        h(
+          "summary",
+          { class: "app-details__summary" },
+          h("i", { class: "ri-link ri", attrs: { "aria-hidden": "true" } }),
+          h("span", { text: copy.socialsTitle }),
+        ),
+        h("p", { class: "app-field__helper", text: copy.socialsBody }),
+        socialsHost,
+        socials.length < 6
+          ? appButton({
+              label: copy.addLink,
+              variant: "secondary",
+              size: "sm",
+              icon: "add-line",
+              onClick: () => {
+                socials.push({ platform: "youtube", url: "" });
+                renderSocials();
+              },
+            })
+          : null,
+      ),
+      h("p", { class: "app-tip", text: copy.noPressure }),
+    );
+    return section;
+  };
+
+  // ---- step 4 -------------------------------------------------------------
+  const renderStepPublish = (): HTMLElement => {
+    const section = h("section", { class: "app-section", attrs: { "aria-labelledby": "onboarding-publish-title" } });
+    section.append(
+      h("h2", { class: "app-section-head__title", id: "onboarding-publish-title", text: copy.publishTitle }),
+      h("p", { class: "app-field__helper", text: copy.publishSub }),
+    );
+
+    if (published && creator) {
+      section.append(
+        appBanner({ tone: "success", title: copy.liveTitle, body: copy.liveSub, role: "status" }),
+        renderAppShareKit(ctx, { creator, methods, copy }),
+        h(
+          "div",
+          { class: "app-onboarding__final" },
+          appLink({ label: copy.viewPage, href: ctx.href(`/@${creator.slug}`), variant: "primary", icon: "external-link-line", external: true }),
+          appLink({ label: copy.toDashboard, href: ctx.href("/dashboard"), variant: "secondary", icon: "arrow-right-line" }),
+        ),
+      );
+      return section;
+    }
+
+    const checks = [
+      { label: copy.checkHandle, done: handleStatus === "available" || Boolean(creator) },
+      { label: copy.checkMethod, done: enabledMethods().length > 0 },
+      { label: copy.checkName, done: displayName.trim().length > 0 },
+    ];
+    const allDone = checks.every((check) => check.done);
+
+    const checklist = h("ul", { class: "app-checklist" });
+    for (const check of checks) {
+      checklist.append(
+        h(
+          "li",
+          { class: cx("app-checklist__item", check.done && "app-checklist__item--done") },
+          h("i", { class: check.done ? "ri-checkbox-circle-line ri" : "ri-checkbox-blank-circle-line ri", attrs: { "aria-hidden": "true" } }),
+          h("span", { text: check.label }),
+        ),
+      );
+    }
+
+    section.append(
+      checklist,
+      ...(enabledMethods().length === 0 ? [appBanner({ tone: "warn", body: copy.publishBlocked, role: "alert" })] : []),
+      h(
+        "div",
+        { class: "app-onboarding__final" },
+        appButton({
+          label: copy.publishCta,
+          variant: "primary",
+          icon: "checkbox-circle-line",
+          disabled: !allDone || !creator,
+          onClick: () => {
+            if (!creator || busy) return;
+            busy = true;
+            void ctx.data
+              .setCreatorStatus(creator.id, "published")
+              .then((updated) => {
+                creator = updated;
+                published = true;
+                toast(copy.liveTitle);
+                busy = false;
+                renderStep();
+              })
+              .catch((error: unknown) => {
+                busy = false;
+                showError(messageForError(ctx, error));
+                renderStep();
+              });
+          },
+        }),
+        appLink({ label: copy.viewPage, href: ctx.href(`/@${creator?.slug ?? ""}`), variant: "ghost", size: "sm", icon: "external-link-line", external: true }),
+      ),
+    );
+    return section;
+  };
+
+  // ---- render -------------------------------------------------------------
+  const renderStep = (options: { focus?: boolean } = {}) => {
+    bannerSlot.replaceChildren();
+    updateRail();
+    updatePreview();
+    updateNav();
+    stepHost.replaceChildren(
+      step === 1
+        ? renderStepAccount()
+        : step === 2
+          ? renderStepPayments()
+          : step === 3
+            ? renderStepProfile()
+            : renderStepPublish(),
+    );
+    if (options.focus) {
+      const heading = stepHost.querySelector<HTMLElement>("h2");
+      if (heading) {
+        heading.setAttribute("tabindex", "-1");
+        heading.focus({ preventScroll: true });
+      }
+    }
+  };
+
+  page.append(
+    appPageHead({
+      eyebrow: ctx.t("app.name"),
+      title: copy.onboardingTitle,
+      description: copy.onboardingSub,
+    }),
+    railSlot,
+    h(
+      "div",
+      { class: "app-onboarding__layout" },
+      h("div", { class: "app-onboarding__main" }, bannerSlot, stepHost, navHost),
+      previewSlot,
     ),
   );
-  return wrap;
 
-  function posterButton(): HTMLElement {
-    return button({
-      label: ctx.t("share.poster"),
-      variant: "secondary",
-      size: "sm",
-      icon: "download",
-      onClick: () => {
-        const method = enabled.find((entry) => entry.qr_payload) ?? enabled[0] ?? null;
-        const poster = generatePosterSvg({
-          creator,
-          method,
-          url: pageUrl,
-          lang: ctx.lang as Lang,
-          demo: creator.is_demo === true,
-        });
-        if (!poster.ok || !poster.svg) {
-          toast(ctx.t("creator.qr.encodeError"));
-          return;
-        }
-        const blob = new Blob([poster.svg], { type: "image/svg+xml;charset=utf-8" });
-        const objectUrl = URL.createObjectURL(blob);
-        const link = h("a", { attrs: { href: objectUrl, download: poster.fileName } });
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
-        toast(ctx.t("poster.downloaded"));
-      },
-    });
-  }
+  renderStep();
+  return page;
 }

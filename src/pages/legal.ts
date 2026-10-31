@@ -1,14 +1,25 @@
 /**
- * Legal pages. Every one carries the visible draft-review banner (Lead decision
- * 12): the entity is not formed and counsel has not signed off. Copy is plain
- * language, no invented legal claims, no fake jurisdiction promise.
+ * Legal pages in the coffee/ledger language. Every page carries the visible
+ * draft-review banner (Lead decision 12) — no invented entity, no jurisdiction
+ * promise. Section copy stays in `src/lib/i18n.ts` (Lead-owned); only the chrome
+ * is re-themed here.
  */
 import { h } from "../lib/dom.ts";
 import { formatDate } from "../lib/format.ts";
 import type { AppContext } from "../lib/app.ts";
 import type { LegalPage } from "../lib/router.ts";
-import { icon } from "../components/icons.ts";
-import { linkButton } from "../components/ui.ts";
+import { appButton, appLink } from "../components/app/ui.ts";
+
+/**
+ * Legal chrome stays static-imported by the router for every route, so it must
+ * not pull the (larger) creator-app copy bank into the landing/supporter bundle.
+ * These are the only two strings it needs beyond shared i18n keys; the mandated
+ * draft banner is shown in both languages.
+ */
+const DRAFT_BN = "খসড়া — আইনি পর্যালোচনার অপেক্ষায়";
+const DRAFT_EN = "Draft — pending legal review";
+const DRAFT_NOTE_BN = "এই লেখা এখনো খসড়া। আইনি পর্যালোচনার আগে এটিকে চূড়ান্ত শর্ত হিসেবে ধরবেন না।";
+const DRAFT_NOTE_EN = "This text is still a draft. Don't treat it as final terms before legal review.";
 
 const LEGAL_UPDATED = "2026-11-01";
 
@@ -57,85 +68,98 @@ const SECTIONS: Record<LegalPage, { titleKey: string; sections: LegalSection[] }
 function moneyPath(ctx: AppContext): HTMLElement {
   return h(
     "figure",
-    { class: "money-path" },
+    { class: "app-money-path" },
     h(
       "div",
-      { class: "money-path__row" },
-      h("div", { class: "money-path__box" }, h("span", { class: "money-path__label", text: ctx.t("legal.hiw.path.you") })),
-      h("span", { class: "money-path__arrow", html: icon("arrowRight", 24) }),
-      h("div", { class: "money-path__box" }, h("span", { class: "money-path__label", text: ctx.t("legal.hiw.path.provider") })),
-      h("span", { class: "money-path__arrow", html: icon("arrowRight", 24) }),
-      h("div", { class: "money-path__box" }, h("span", { class: "money-path__label", text: ctx.t("legal.hiw.path.creator") })),
+      { class: "app-money-path__row" },
+      h("span", { class: "app-money-path__box", text: ctx.t("legal.hiw.path.you") }),
+      h("span", { class: "app-money-path__arrow", html: '<i class="ri-arrow-right-line ri" aria-hidden="true"></i>' }),
+      h("span", { class: "app-money-path__box", text: ctx.t("legal.hiw.path.provider") }),
+      h("span", { class: "app-money-path__arrow", html: '<i class="ri-arrow-right-line ri" aria-hidden="true"></i>' }),
+      h("span", { class: "app-money-path__box", text: ctx.t("legal.hiw.path.creator") }),
     ),
     h(
       "div",
-      { class: "money-path__outside" },
-      h("span", { class: "money-path__dash", attrs: { "aria-hidden": "true" } }),
-      h("span", { class: "money-path__label", text: ctx.t("legal.hiw.path.chanasta") }),
+      { class: "app-money-path__outside" },
+      h("span", { class: "app-money-path__dash", attrs: { "aria-hidden": "true" } }),
+      h("span", { text: ctx.t("legal.hiw.path.chanasta") }),
     ),
-    h("figcaption", { class: "money-path__caption", text: ctx.t("legal.hiw.path.note") }),
+    h("figcaption", { class: "app-field__helper", text: ctx.t("legal.hiw.path.note") }),
   );
 }
 
 export function renderLegal(ctx: AppContext, page: LegalPage): HTMLElement {
+  const isBn = ctx.lang === "bn";
+  const draftLabel = isBn ? DRAFT_BN : DRAFT_EN;
+  const draftSibling = isBn ? DRAFT_EN : DRAFT_BN;
+  const draftNote = isBn ? DRAFT_NOTE_BN : DRAFT_NOTE_EN;
   const config = SECTIONS[page];
   const lastUpdated = formatDate(ctx.lang, LEGAL_UPDATED);
+
   const toc = h(
     "nav",
-    { class: "legal__toc", attrs: { "aria-label": ctx.t("legal.toc") } },
-    h("p", { class: "legal__toc-title", text: ctx.t("legal.toc") }),
+    { class: "app-legal__toc", attrs: { "aria-label": ctx.t("legal.toc") } },
+    h("p", { class: "app-eyebrow", text: ctx.t("legal.toc") }),
     h(
       "ul",
-      { class: "legal__toc-list" },
+      { class: "app-legal__toc-list" },
       ...config.sections.map((section) =>
         h("li", {}, h("a", { attrs: { href: `#${section.id}` }, text: ctx.t(section.titleKey) })),
       ),
     ),
   );
 
-  const article = h("article", { class: "legal" },
+  const article = h(
+    "article",
+    { class: "app-legal" },
     h(
       "header",
-      { class: "legal__header" },
-      h("h1", { class: "legal__title", text: ctx.t(config.titleKey) }),
-      h("p", { class: "legal__updated", text: ctx.t("legal.lastUpdated", { date: lastUpdated }) }),
+      { class: "app-legal__header" },
+      h("p", { class: "app-eyebrow", text: ctx.t("app.name") }),
+      h("h1", { class: "app-legal__title", text: ctx.t(config.titleKey) }),
+      h("p", { class: "app-field__helper", text: ctx.t("legal.lastUpdated", { date: lastUpdated }) }),
       h(
         "div",
-        { class: "draft-banner", attrs: { role: "note" } },
-        h("span", { class: "draft-banner__icon", html: icon("info", 16) }),
-        h("span", { class: "draft-banner__text", text: ctx.t("legal.draft") }),
+        { class: "app-legal__draft", attrs: { role: "note" } },
+        h("span", { class: "app-legal__draft-badge", text: draftLabel }),
+        h(
+          "p",
+          { class: "app-field__helper", attrs: { lang: isBn ? "en" : "bn" } },
+          draftSibling,
+        ),
+        h("p", { class: "app-field__helper", text: draftNote }),
       ),
     ),
     page === "how-it-works" ? moneyPath(ctx) : null,
     ...config.sections.map((section) =>
       h(
         "section",
-        { class: "legal__section", attrs: { "aria-labelledby": `legal-${section.id}` } },
-        h("h2", { class: "legal__h2", id: `legal-${section.id}`, text: ctx.t(section.titleKey) }),
-        h("p", { class: "legal__body", text: ctx.t(section.bodyKey) }),
+        { class: "app-legal__section", attrs: { "aria-labelledby": `legal-${section.id}` } },
+        h("h2", { class: "app-legal__h2", id: `legal-${section.id}`, text: ctx.t(section.titleKey) }),
+        h("p", { class: "app-legal__body", text: ctx.t(section.bodyKey) }),
       ),
     ),
     page === "how-it-works"
       ? h(
           "section",
-          { class: "legal__section legal__section--safety", attrs: { "aria-labelledby": "legal-safety" } },
-          h("h2", { class: "legal__h2", id: "legal-safety", text: ctx.t("legal.hiw.safety.title") }),
-          h("p", { class: "legal__body", text: ctx.t("legal.hiw.safety.body") }),
+          { class: "app-legal__section app-legal__section--safety", attrs: { "aria-labelledby": "legal-safety" } },
+          h("h2", { class: "app-legal__h2", id: "legal-safety", text: ctx.t("legal.hiw.safety.title") }),
+          h("p", { class: "app-legal__body", text: ctx.t("legal.hiw.safety.body") }),
         )
       : null,
     h(
       "footer",
-      { class: "legal__footer" },
-      h("p", { class: "legal__links" },
-        h("a", { class: "link", attrs: { href: ctx.href("/legal/terms"), "data-link": true }, text: ctx.t("footer.terms") }),
-        " · ",
-        h("a", { class: "link", attrs: { href: ctx.href("/legal/privacy"), "data-link": true }, text: ctx.t("footer.privacy") }),
-        " · ",
-        h("a", { class: "link", attrs: { href: ctx.href("/legal/how-it-works"), "data-link": true }, text: ctx.t("footer.howItWorks") }),
+      { class: "app-legal__footer" },
+      h(
+        "p",
+        { class: "app-legal__links" },
+        appLink({ label: ctx.t("footer.terms"), href: ctx.href("/legal/terms"), variant: "ghost", size: "sm" }),
+        appLink({ label: ctx.t("footer.privacy"), href: ctx.href("/legal/privacy"), variant: "ghost", size: "sm" }),
+        appLink({ label: ctx.t("footer.howItWorks"), href: ctx.href("/legal/how-it-works"), variant: "ghost", size: "sm" }),
       ),
-      linkButton({ href: ctx.href("/"), label: ctx.t("legal.backHome"), variant: "secondary", size: "sm", icon: "arrowLeft" }),
+      appButton({ label: ctx.t("legal.backHome"), variant: "secondary", size: "sm", icon: "arrow-left-line", onClick: () => ctx.navigate("/") }),
     ),
   );
 
-  return h("div", { class: "legal-layout" }, toc, article);
+  return h("div", { class: "app-legal-layout" }, toc, article);
 }

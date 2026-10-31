@@ -236,7 +236,7 @@ export class LocalStore {
       display_name: input.display_name.trim(),
       tagline: input.tagline?.trim() || null,
       bio: input.bio?.trim() || null,
-      avatar_emoji: input.avatar_emoji ?? "☕",
+      avatar_emoji: input.avatar_emoji ?? "ri-cup-line",
       socials: {},
       goal_amount_bdt: null,
       goal_note: null,

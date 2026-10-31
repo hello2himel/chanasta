@@ -1,16 +1,32 @@
-/** Landing page: what Chanasta is, what it never does, and three working demos. */
+/**
+ * Landing — the argument, in order:
+ *
+ *   hero (receipt specimen) → the money path → demo pages → who it's for →
+ *   honest limits → FAQ → closing CTA.
+ *
+ * There are no invented stats, no testimonials and no fake logos; the only
+ * social proof is the clearly-stamped demo strip. The chrome (cup wordmark,
+ * nav, language toggle, footer) lives in `components/layout.ts`.
+ */
 import { h, copyText, toast } from "../lib/dom.ts";
 import { buildShareKit } from "../lib/share.ts";
 import type { AppContext } from "../lib/app.ts";
 import { DEMO_CREATORS, demoMethodsFor } from "../lib/demo.ts";
-import { icon, steamMark } from "../components/icons.ts";
-import { avatar, badge, button, disclosure, linkButton, sectionHeading } from "../components/ui.ts";
-import { renderPreviewCard } from "../components/preview-card.ts";
+import { icon } from "../components/icons.ts";
+import { pubLink } from "../components/public/primitives.ts";
+import { renderDemoStrip, renderLimits, renderWhoLedger } from "../components/public/ledger.ts";
+import { renderMoneyPath } from "../components/public/money-path.ts";
+import { lastUpdatedIso, renderReceiptSpecimen } from "../components/public/receipt.ts";
+import { COPY, pick, pickList, receiptCopyFor } from "./copy.public.ts";
 
 export async function renderHome(ctx: AppContext): Promise<HTMLElement> {
-  const creators = await ctx.data.listPublishedCreators().catch(() => DEMO_CREATORS);
-  const teacher = creators.find((creator) => creator.slug === "demo-teacher") ?? DEMO_CREATORS[0];
-  const teacherMethods = teacher ? await ctx.data.listPaymentMethods(teacher.slug).catch(() => []) : [];
+  // The landing specimen is always the synthetic demo teacher: a visitor who has
+  // never heard of Chanasta should never see a real creator's page used as the
+  // product sample. Storage/Supabase gets first say when the demo creator
+  // exists there; otherwise the in-repo synthetic fixtures apply.
+  const teacher = (await ctx.data.getCreator("demo-teacher").catch(() => null)) ?? DEMO_CREATORS[0];
+  const fetchedMethods = await ctx.data.listPaymentMethods("demo-teacher").catch(() => []);
+  const teacherMethods = fetchedMethods.length > 0 ? fetchedMethods : demoMethodsFor("demo-teacher");
   const kit = teacher
     ? buildShareKit({
         slug: teacher.slug,
@@ -21,243 +37,225 @@ export async function renderHome(ctx: AppContext): Promise<HTMLElement> {
       })
     : null;
 
+  const copy = COPY.landing;
+  const t = pick(ctx.lang);
+  const demoBadge = ctx.t("demo.badge");
+
+  // ---- hero --------------------------------------------------------------
   const hero = h(
     "section",
-    { class: "hero", attrs: { "aria-labelledby": "hero-title" } },
+    { class: "pub-hero", attrs: { "aria-labelledby": "pub-hero-title" } },
     h(
       "div",
-      { class: "hero__copy" },
-      h("p", { class: "hero__eyebrow" }, h("span", { class: "hero__steam", html: steamMark(18), attrs: { "aria-hidden": "true" } }), ctx.t("app.tagline")),
-      h("h1", { class: "hero__title", id: "hero-title", text: ctx.t("app.tagline2") }),
-      h("p", { class: "hero__lead", text: ctx.t("landing.hero.lead") }),
-      h("p", { class: "hero__body", text: ctx.t("landing.hero.body") }),
+      { class: "pub-hero__copy" },
+      h(
+        "p",
+        { class: "pub-eyebrow" },
+        h("span", { class: "pub-eyebrow__dot", attrs: { "aria-hidden": "true" } }),
+        h("span", { text: t(copy.eyebrow) }),
+      ),
+      h(
+        "h1",
+        { class: "pub-hero__title", id: "pub-hero-title" },
+        h("span", { text: `${t(copy.heroTitleA)} ` }),
+        h("span", { class: "pub-hero__accent", text: t(copy.heroTitleAccent) }),
+        t(copy.heroTitleB) ? h("span", { text: ` ${t(copy.heroTitleB)}` }) : null,
+      ),
+      h("p", { class: "pub-hero__sub", text: t(copy.heroSub) }),
+      h("p", { class: "pub-hero__lead", text: t(copy.heroLead) }),
       h(
         "div",
-        { class: "hero__actions" },
-        linkButton({
-          href: ctx.href("/onboarding"),
-          label: ctx.t("nav.create"),
-          variant: "primary",
-          icon: "plus",
-        }),
-        linkButton({
+        { class: "pub-hero__actions" },
+        pubLink({ href: ctx.href("/onboarding"), label: t(copy.ctaPrimary), icon: "plus" }),
+        pubLink({
           href: ctx.href("/@demo-teacher"),
-          label: ctx.t("landing.demoCta"),
+          label: t(copy.ctaSecondary),
           variant: "secondary",
           iconTrailing: "arrowRight",
         }),
       ),
-      h("p", { class: "hero__honesty", text: ctx.t("honesty.moneyPath") }),
+      h(
+        "ul",
+        { class: "pub-hero__trust" },
+        ...pickList(ctx.lang, copy.trust).map((item) =>
+          h(
+            "li",
+            { class: "pub-hero__trust-item" },
+            h("span", { class: "pub-hero__trust-mark", html: icon("check", 16), attrs: { "aria-hidden": "true" } }),
+            h("span", { text: item }),
+          ),
+        ),
+      ),
+      h("p", { class: "pub-hero__honesty", text: ctx.t("honesty.moneyPath") }),
     ),
     teacher
       ? h(
           "div",
-          { class: "hero__card" },
-          renderPreviewCard(ctx, {
+          { class: "pub-hero__specimen" },
+          renderReceiptSpecimen({
+            ctx,
             creator: teacher,
-            methods: teacherMethods,
-            variant: "landing",
-            pageHref: ctx.href(`/@${teacher.slug}`),
-            amount: 20,
-            demo: true,
+            method: teacherMethods[0] ?? null,
+            amount: 50,
+            demo: teacher.is_demo === true,
+            updatedIso: lastUpdatedIso(teacher, teacherMethods),
+            copy: receiptCopyFor(ctx.lang),
+            sampleClaim: {
+              name: ctx.lang === "bn" ? "মিতু" : "Mitu",
+              amount: 100,
+              message:
+                ctx.lang === "bn"
+                  ? "অংকের ভয় কেটে গেছে। ধন্যবাদ!"
+                  : "My fear of maths is gone. Thank you!",
+              stamp: ctx.t("claim.badge.selfReported"),
+            },
           }),
         )
       : null,
   );
 
-  const howItWorks = h(
-    "section",
-    { class: "section", attrs: { "aria-labelledby": "how-it-works-title" } },
-    sectionHeading(ctx.t("landing.howItWorks"), "h2", "how-it-works-title"),
-    h(
-      "div",
-      { class: "steps" },
-      ...[
-        { title: ctx.t("landing.step1") },
-        { title: ctx.t("landing.step2") },
-        { title: ctx.t("landing.step3") },
-      ].map((step, index) =>
+  // ---- money path (full bleed) ------------------------------------------
+  const moneyPath = renderMoneyPath({
+    title: t(copy.moneyTitle),
+    lead: t(copy.moneyLead),
+    supporter: t(copy.pathSupporter),
+    money: t(copy.pathMoney),
+    creator: t(copy.pathCreator),
+    bracket: t(copy.pathBracket),
+    steps: [
+      { title: t(copy.step1Title), body: t(copy.step1Body) },
+      { title: t(copy.step2Title), body: t(copy.step2Body) },
+      { title: t(copy.step3Title), body: t(copy.step3Body) },
+    ],
+  });
+
+  // ---- demo strip -------------------------------------------------------
+  const demoStrip = renderDemoStrip(ctx, DEMO_CREATORS, {
+    title: t(copy.demoTitle),
+    intro: t(copy.demoIntro),
+    open: t(copy.demoOpen),
+    demoBadge,
+  });
+
+  // ---- who it's for -----------------------------------------------------
+  const who = renderWhoLedger(
+    copy.whoRows.map((row) => ({ icon: row.icon, title: t(row.title), body: t(row.body) })),
+    { title: t(copy.whoTitle), lead: t(copy.whoLead), id: "pub-who-title" },
+  );
+
+  const embedBlock = kit
+    ? h(
+        "details",
+        { class: "pub-embed-code" },
+        h(
+          "summary",
+          { class: "pub-embed-code__summary" },
+          h("span", { class: "pub-embed-code__icon", html: icon("code", 18), attrs: { "aria-hidden": "true" } }),
+          h(
+            "span",
+            { class: "pub-embed-code__heading" },
+            h("strong", { text: t(copy.embedTitle) }),
+            h("span", { text: t(copy.embedBody) }),
+          ),
+          h("span", { class: "pub-embed-code__chevron", html: icon("chevronDown", 18), attrs: { "aria-hidden": "true" } }),
+        ),
         h(
           "div",
-          { class: "steps__item" },
-          h("span", { class: "steps__number", text: String(index + 1), attrs: { "aria-hidden": "true" } }),
-          h("p", { class: "steps__title", text: step.title }),
-          index < 2 ? h("span", { class: "steps__arrow", html: icon("arrowRight", 20), attrs: { "aria-hidden": "true" } }) : null,
-        ),
-      ),
-    ),
-    h("p", { class: "steps__note", text: ctx.t("landing.notBetween") }),
-    disclosure({ ctx, bnKey: "honesty.landingFooter", enKey: "honesty.landingFooter", variant: "plain" }),
-  );
-
-  const forCreators = h(
-    "section",
-    { class: "section", attrs: { "aria-labelledby": "for-creators-title" } },
-    sectionHeading(ctx.t("landing.forCreators"), "h2", "for-creators-title"),
-    h(
-      "ul",
-      { class: "feature-list" },
-      ...[
-        "landing.bullet.ownAccount",
-        "landing.bullet.noCut",
-        "landing.bullet.banglaFirst",
-        "landing.bullet.embeddable",
-      ].map((key) =>
-        h(
-          "li",
-          { class: "feature-list__item" },
-          h("span", { class: "feature-list__icon", html: icon("checkCircle", 20) }),
-          h("span", { text: ctx.t(key) }),
-        ),
-      ),
-    ),
-    linkButton({ href: ctx.href("/onboarding"), label: ctx.t("nav.create"), variant: "secondary", icon: "plus" }),
-  );
-
-  const wayRow = (label: string, detail: string, badgeNode: Node) =>
-    h(
-      "div",
-      { class: "ways__row" },
-      h("div", { class: "ways__label" }, badgeNode, h("span", { class: "ways__name", text: label })),
-      h("p", { class: "ways__detail", text: detail }),
-    );
-
-  const ways = h(
-    "section",
-    { class: "section", attrs: { "aria-labelledby": "ways-title" } },
-    sectionHeading(ctx.t("landing.ways"), "h2", "ways-title"),
-    h(
-      "div",
-      { class: "ways" },
-      wayRow(
-        ctx.t("landing.ways.verified"),
-        ctx.t("landing.ways.verified.detail"),
-        badge({ label: ctx.t("creator.qr.status.verified"), variant: "confirmed", icon: "checkCircle" }),
-      ),
-      wayRow(
-        ctx.t("landing.ways.unverified"),
-        ctx.t("landing.ways.unverified.detail"),
-        badge({ label: ctx.t("creator.qr.status.unverified"), variant: "selfreported", icon: "info" }),
-      ),
-      wayRow(
-        ctx.t("landing.ways.manual"),
-        ctx.t("landing.ways.manual.detail"),
-        badge({ label: ctx.t("creator.qr.status.manual"), variant: "neutral", icon: "hash" }),
-      ),
-    ),
-    h("p", { class: "ways__terms", text: ctx.t("honesty.providerTerms") }),
-  );
-
-  const demoPages = h(
-    "section",
-    { class: "section", attrs: { id: "demo-pages", "aria-labelledby": "demo-pages-title" } },
-    sectionHeading(ctx.t("landing.demoPages"), "h2", "demo-pages-title"),
-    h("p", { class: "section__lead", text: ctx.t("landing.demoPages.intro") }),
-    h(
-      "div",
-      { class: "demo-grid" },
-      ...(creators.length > 0 ? creators : DEMO_CREATORS).map((creator) =>
-        h(
-          "a",
-          {
-            class: "demo-card",
-            attrs: { href: ctx.href(`/@${creator.slug}`), "data-link": true },
-          },
+          { class: "pub-embed-code__body" },
+          h("pre", { class: "pub-embed-code__pre" }, h("code", { text: kit.iframe })),
           h(
             "div",
-            { class: "demo-card__identity" },
-            avatar(creator.avatar_emoji, "md"),
+            { class: "pub-embed-code__actions" },
             h(
-              "div",
-              { class: "demo-card__names" },
-              h("span", { class: "demo-card__name", text: creator.display_name }),
-              h("span", { class: "demo-card__slug", text: `@${creator.slug}`, attrs: { dir: "ltr" } }),
+              "button",
+              {
+                class: "btn btn--secondary btn--sm pub-btn pub-btn--secondary pub-btn--sm",
+                attrs: { type: "button" },
+                on: {
+                  click: () => {
+                    void copyText(kit.iframe).then((ok) => toast(ok ? ctx.t("common.copied") : ctx.t("common.selectToCopy")));
+                  },
+                },
+              },
+              h("span", { class: "pub-btn__icon", html: icon("copy", 18), attrs: { "aria-hidden": "true" } }),
+              h("span", { class: "pub-btn__label", text: t(copy.embedCopy) }),
             ),
-            badge({ label: ctx.t("demo.badge"), variant: "demo" }),
-          ),
-          creator.tagline ? h("p", { class: "demo-card__tagline", text: creator.tagline }) : null,
-          h("span", { class: "demo-card__cta" }, ctx.t("landing.demoPageCta"), h("span", { html: icon("arrowRight", 16) })),
-        ),
-      ),
-    ),
-  );
-
-  const embedSection = h(
-    "section",
-    { class: "section", attrs: { "aria-labelledby": "embed-title" } },
-    sectionHeading(ctx.t("landing.embed"), "h2", "embed-title"),
-    h("p", { class: "section__lead", text: ctx.t("landing.embed.body") }),
-    kit
-      ? h(
-          "div",
-          { class: "embed-demo" },
-          h(
-            "div",
-            { class: "embed-demo__frame" },
-            h("iframe", {
-              attrs: {
-                src: kit.embedUrl,
-                title: ctx.t("share.iframeTitle", { name: teacher?.display_name ?? "" }),
-                loading: "lazy",
-                width: "380",
-                height: "480",
-                class: "embed-demo__iframe",
-              },
-            }),
-          ),
-          h(
-            "div",
-            { class: "embed-demo__code" },
-            h("pre", { class: "share-kit__code" }, h("code", { text: kit.iframe })),
-            button({
-              label: ctx.t("share.embedButton"),
-              variant: "secondary",
+            pubLink({
+              href: ctx.href("/embed/@demo-teacher"),
+              label: t(copy.embedPreview),
+              variant: "ghost",
               size: "sm",
-              icon: "copy",
-              onClick: () => {
-                void copyText(kit.iframe).then((ok) => toast(ok ? ctx.t("common.copied") : ctx.t("common.selectToCopy")));
-              },
+              icon: "external",
+              external: true,
             }),
-            h("p", { class: "embed-demo__preview-label", text: ctx.t("share.embedPreview") }),
           ),
-        )
-      : null,
-  );
+        ),
+      )
+    : null;
 
-  const faqs: Array<[string, string]> = [
-    ["landing.faq.q1", "landing.faq.a1"],
-    ["landing.faq.q2", "landing.faq.a2"],
-    ["landing.faq.q3", "landing.faq.a3"],
-    ["landing.faq.q4", "landing.faq.a4"],
-    ["landing.faq.q5", "landing.faq.a5"],
-  ];
+  // ---- honest limits ----------------------------------------------------
+  const limits = renderLimits({
+    title: t(copy.limitsTitle),
+    doTitle: t(copy.limitsDoTitle),
+    doItems: pickList(ctx.lang, copy.limitsDo),
+    dontTitle: t(copy.limitsDontTitle),
+    dontItems: pickList(ctx.lang, copy.limitsDont),
+    terms: ctx.t("honesty.providerTerms"),
+  });
+
+  // ---- FAQ --------------------------------------------------------------
   const faq = h(
     "section",
-    { class: "section", attrs: { "aria-labelledby": "faq-title" } },
-    sectionHeading(ctx.t("landing.faq"), "h2", "faq-title"),
+    { class: "pub-faq", attrs: { "aria-labelledby": "pub-faq-title" } },
+    h(
+      "header",
+      { class: "pub-section-head" },
+      h("h2", { class: "pub-section-head__title", id: "pub-faq-title", text: t(copy.faqTitle) }),
+    ),
     h(
       "div",
-      { class: "faq" },
-      ...faqs.map(([question, answer]) =>
+      { class: "pub-faq__list" },
+      ...copy.faqItems.map((item) =>
         h(
           "details",
-          { class: "faq__item" },
-          h("summary", { class: "faq__question" }, h("span", { text: ctx.t(question) }), h("span", { class: "faq__chevron", html: icon("chevronDown", 18) })),
-          h("p", { class: "faq__answer", text: ctx.t(answer) }),
+          { class: "pub-faq__item" },
+          h(
+            "summary",
+            { class: "pub-faq__question" },
+            h("span", { class: "pub-faq__q", text: t(item.q) }),
+            h("span", { class: "pub-faq__icon pub-faq__icon--plus", html: icon("plus", 18), attrs: { "aria-hidden": "true" } }),
+            h("span", { class: "pub-faq__icon pub-faq__icon--minus", html: icon("x", 18), attrs: { "aria-hidden": "true" } }),
+          ),
+          h("p", { class: "pub-faq__answer", text: t(item.a) }),
         ),
       ),
     ),
+  );
+
+  // ---- closing CTA ------------------------------------------------------
+  const closing = h(
+    "section",
+    { class: "pub-closing", attrs: { "aria-labelledby": "pub-closing-title" } },
+    h(
+      "div",
+      { class: "pub-closing__inner" },
+      h(
+        "div",
+        { class: "pub-closing__copy" },
+        h("h2", { class: "pub-closing__title", id: "pub-closing-title", text: t(copy.closingTitle) }),
+        h("p", { class: "pub-closing__lead", text: t(copy.closingLead) }),
+      ),
+      pubLink({ href: ctx.href("/onboarding"), label: t(copy.closingCta), iconTrailing: "arrowRight" }),
+    ),
+    h("p", { class: "pub-closing__note", text: ctx.t("honesty.moneyPath") }),
   );
 
   return h(
     "div",
-    { class: "page page--landing" },
+    { class: "pub-page pub-landing" },
     hero,
-    howItWorks,
-    forCreators,
-    ways,
-    demoPages,
-    embedSection,
-    faq,
+    moneyPath,
+    h("div", { class: "pub-landing__body" }, demoStrip, who, embedBlock, limits, faq),
+    closing,
   );
 }

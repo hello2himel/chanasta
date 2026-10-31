@@ -92,6 +92,15 @@ pnpm sync:deshiqr
 - **Tests:** `node:test` pure-logic suite plus a PGlite harness that applies the real schema and
   asserts the RLS/RPC security model (255 assertions).
 
+## Design
+
+The interface was rebuilt on a supplied five-board design in a coffee "roastery ledger" theme: jute paper,
+espresso ink, brass and roasted-caramel accents, with **Spectral + Noto Serif Bengali** typography. One
+memorable artifact — the perforated **chai receipt** — carries the QR on the supporter page and poster;
+the money-path band is the only full-bleed section. No gradients, glass, emoji or card-kit decoration:
+**RemixIcon** is the single icon family and the design brief in [`docs/redesign.md`](docs/redesign.md)
+records the AI-slop audit and the de-slopped decisions.
+
 ## Quick start
 
 ```sh

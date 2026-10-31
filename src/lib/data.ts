@@ -199,7 +199,7 @@ function rowToCreator(row: Record<string, unknown>): Creator {
     display_name: typeof mapped.display_name === "string" ? mapped.display_name : "",
     tagline: (mapped.tagline as string | null) ?? null,
     bio: (mapped.bio as string | null) ?? null,
-    avatar_emoji: (mapped.avatar_emoji as string) ?? "☕",
+    avatar_emoji: (mapped.avatar_emoji as string) ?? "ri-cup-line",
     socials: (mapped.socials as Record<string, string>) ?? {},
     goal_amount_bdt: typeof mapped.goal_amount_bdt === "number" ? mapped.goal_amount_bdt : null,
     goal_note: (mapped.goal_note as string | null) ?? null,
@@ -341,7 +341,7 @@ export class SupabaseData implements DataApi {
           display_name: input.display_name,
           tagline: input.tagline ?? null,
           bio: input.bio ?? null,
-          avatar_emoji: input.avatar_emoji ?? "☕",
+          avatar_emoji: input.avatar_emoji ?? "ri-cup-line",
           default_locale: input.default_locale ?? "bn",
         })
         .select("*")

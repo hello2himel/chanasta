@@ -78,7 +78,7 @@ export function mapCreatorRow(row: Record<string, unknown> | null): Record<strin
     ...row,
     tagline: typeof row.tagline === "string" ? row.tagline : null,
     bio: typeof row.bio === "string" ? row.bio : null,
-    avatar_emoji: typeof row.avatar_emoji === "string" ? row.avatar_emoji : "☕",
+    avatar_emoji: typeof row.avatar_emoji === "string" ? row.avatar_emoji : "ri-cup-line",
     socials: typeof row.socials === "object" && row.socials !== null ? row.socials : {},
     default_locale: normaliseLang(row.default_locale),
     verified: row.verified === true,

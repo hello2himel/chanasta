@@ -1,0 +1,136 @@
+/* ==========================================================================
+   Chanasta — coffee theme layer
+   --------------------------------------------------------------------------
+   Loaded after design/tokens.css. It overrides the token *values* only, so the
+   whole app re-themes without touching component CSS.
+
+   Theme concept: "roastery ledger" — jute paper, espresso ink, brass and
+   roasted-caramel accents, milk-foam surfaces. No gradients, no glass, no
+   neon. The only decorative warmth is paper + ink + one brass rule; the
+   memorable element is the perforated chai receipt, not ornament.
+
+   Dark mode is an espresso counter at night: warm near-black surfaces, crema
+   text, brass accent. QR plates are always white (scan reality).
+
+   Brand rules baked in here: --qr-bg/--qr-fg never follow dark mode;
+   --accent-ink is the on-accent text colour; demo banner uses ink/crema.
+   ========================================================================== */
+
+:root {
+  /* ---- typefaces (user-directed serif pairing) -------------------------- */
+  /* Latin: Spectral (a screen-first serif with a slightly editorial voice).
+     Bangla + ৳: Noto Serif Bengali, which covers Bengali script and the taka
+     sign; Spectral is listed first so Latin takes Spectral and Bengali glyphs
+     fall through. Body copy stays serif on purpose — the coffee palette and
+     ledger structure keep the page out of the "cream + serif + terracotta"
+     generator look this project explicitly avoids. */
+  --font-sans: "Spectral", "Noto Serif Bengali", system-ui, -apple-system, "Segoe UI", Roboto,
+    Georgia, serif;
+  --font-bn: var(--font-sans);
+  --font-en: "Spectral", system-ui, -apple-system, "Segoe UI", Roboto, Georgia, serif;
+  --font-num: "Noto Serif Bengali", "Spectral", Georgia, serif;
+  --font-display: "Spectral", "Noto Serif Bengali", Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+
+  /* ---- light: jute paper + espresso + brass ----------------------------- */
+  --bg: #f1e8db;
+  --surface: #fbf6ec;
+  --raised: #fffdf8;
+  --ink: #241811;
+  --muted: #6e5b4b;
+  --line: #ddcfbd;
+  --line-strong: #c7b49d;
+
+  --accent: #9b5521;
+  --accent-hover: #87471a;
+  --accent-active: #74400f;
+  --accent-soft: #f1dfc9;
+  --accent-ink: #fff8ed;
+
+  --success: #4f6b3b;
+  --success-soft: #e7edda;
+  --warn: #a66a12;
+  --warn-soft: #f7e8c6;
+  --danger: #8e2f26;
+  --danger-hover: #7c2820;
+  --danger-strong: #74241d;
+  --danger-soft: #f6deda;
+
+  --focus: #7c5613;
+  --focus-ring: 0 0 0 3px rgba(124, 86, 19, 0.35);
+  --focus-width: 2px;
+  --focus-offset: 2px;
+
+  /* QR must stay dark-on-white in every theme. */
+  --qr-bg: #ffffff;
+  --qr-fg: #1b120c;
+  --qr-plate-bg: #ffffff;
+  --qr-plate-radius: var(--radius-md);
+  --qr-plate-padding: 12px;
+  --qr-plate-shadow: none;
+  --qr-panel-bg: var(--surface);
+  --qr-panel-border-color: var(--line);
+  --qr-panel-radius: var(--radius-lg);
+  --qr-panel-padding: 16px;
+  --qr-panel-shadow: none;
+  --qr-quiet-zone: 4;
+  --qr-size: 240px;
+  --qr-size-sm: 160px;
+  --qr-size-lg: 320px;
+
+  --demo-banner-bg: #2a1a12;
+  --demo-banner-ink: #f3e7d6;
+  --demo-banner-height: 34px;
+
+  /* ---- dark: espresso counter ------------------------------------------ */
+  --bg-dark: #150f0a;
+  --surface-dark: #1f1711;
+  --raised-dark: #291f17;
+  --ink-dark: #f3e9dc;
+  --muted-dark: #b9a794;
+  --line-dark: #3a2c21;
+  --line-strong-dark: #513e2d;
+
+  --accent-dark: #d9a04b;
+  --accent-hover-dark: #e8b269;
+  --accent-active-dark: #f0bf7c;
+  --accent-soft-dark: #3a2a18;
+  --accent-ink-dark: #241811;
+
+  --success-dark: #9dbf86;
+  --success-soft-dark: #23301c;
+  --warn-dark: #e0b25e;
+  --warn-soft-dark: #3a2c16;
+  --danger-dark: #e39086;
+  --danger-hover-dark: #f0a69c;
+  --danger-strong-dark: #f0a69c;
+  --danger-soft-dark: #3a201d;
+  --focus-dark: #e8b269;
+
+  /* ---- shape: a tightened scale (no 28px-everything) ------------------- */
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+
+  --border-width: 1px;
+  --border-width-strong: 1.5px;
+
+  /* Two elevations only: a hairline lift and a true overlay. Cards use
+     borders and paper, not shadows. */
+  --shadow-color: rgba(36, 24, 17, 0.1);
+  --shadow-color-dark: rgba(0, 0, 0, 0.55);
+  --shadow-xs: 0 1px 0 var(--shadow-color);
+  --shadow-sm: 0 1px 2px var(--shadow-color);
+  --shadow-md: 0 10px 28px -18px var(--shadow-color);
+  --shadow-lg: 0 28px 64px -28px var(--shadow-color);
+
+  /* Money is tabular; receipts are monospaced. */
+  --amount-font: var(--font-num);
+  --amount-feature-settings: "tnum" 1, "lnum" 1;
+}
