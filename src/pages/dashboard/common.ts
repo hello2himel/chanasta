@@ -149,7 +149,6 @@ export function noPageContent(ctx: AppContext, copy: ResolvedAppCopy): HTMLEleme
         body: copy.noPageBody,
         action: appLink({ label: copy.noPageCta, href: ctx.href("/onboarding"), variant: "primary", icon: "add-line" }),
       }),
-      ctx.isDemoMode ? h("p", { class: "app-note", text: copy.demoNote }) : null,
     ),
   );
 }
