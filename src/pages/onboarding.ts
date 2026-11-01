@@ -286,6 +286,7 @@ export async function renderOnboarding(ctx: AppContext): Promise<HTMLElement> {
         spellcheck: "false",
         maxlength: 30,
         value: handle,
+        placeholder: "your-name",
         "aria-describedby": "onboarding-handle-status",
       },
     });
@@ -344,7 +345,7 @@ export async function renderOnboarding(ctx: AppContext): Promise<HTMLElement> {
     });
 
     const accountLine = ctx.isDemoMode
-      ? appBanner({ tone: "info", body: copy.accountLocal, role: "note" })
+      ? h("p", { class: "app-field__helper", text: copy.accountLocal })
       : h("p", { class: "app-field__helper", text: `${copy.accountSignedIn}: ${session?.email ?? ""}` });
 
     return h(
